@@ -1,0 +1,11 @@
+{
+  "model": "gemini-3.1-flash-lite",
+  "datasetVersion": "bffeb81c8c3c",
+  "recordedAt": "2026-10-18",
+  "runsPerPair": 5,
+  "promptVersion": "v1",
+  "validRate": 1,
+  "overallMeanStdev": 0,
+  "finalMeanStdev": 0,
+  "rankingAgreement": 1
+}

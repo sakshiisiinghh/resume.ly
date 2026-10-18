@@ -331,7 +331,7 @@ Show matched and missing terms with evidence from the resume text. Treat checks 
 
 - [x] Fast unit/eval checks in CI (`npm test` fails if the deterministic numbers get worse).
 - [x] A small prompt-regression set runs when `llm/` or `ats/` changes (`.github/workflows/eval.yml`; the AI part needs the `GEMINI_API_KEY` secret).
-- [x] Set thresholds only after a baseline exists: the deterministic baseline is recorded. The AI baseline is left until the shipping model is chosen, since it is tied to a model.
+- [x] Set thresholds only after a baseline exists: the deterministic baseline is recorded. The AI baseline is recorded for prompt v1 on the default model, `gemini-3.1-flash-lite`.
 
 **Deliverable:** a reproducible report with actual results and known limitations.
 

@@ -148,7 +148,7 @@ async function llm(flags: { runs?: string; prompts?: string; quick?: boolean; fr
     }
     const runDates = [...new Set(records.map((r) => r.at ?? today()))].sort();
     const meta = { date: today(), commit: commit(), datasetVersion: datasetVersion(), model, runDates, runsPerPair: runs, pairs: pairs.length, productionPrompt: PROMPT_VERSION, pricesGiven: Boolean(prices) };
-    const slug = `${meta.date}-llm-${model}`;
+    const slug = `${meta.date}-llm-${model}-${prompts.join("+")}`;
 
     write(`${REPORTS}/${slug}.md`, renderLlmReport(summaries, meta));
     write(`${REPORTS}/${slug}.json`, JSON.stringify({ meta, summaries, records }, null, 2));

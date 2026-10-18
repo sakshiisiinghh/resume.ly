@@ -66,4 +66,4 @@ export const prepareInstructions = ({
 
 export const PROMPT_VERSION = "v1";
 
-export const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite";

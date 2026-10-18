@@ -7,12 +7,12 @@ Numbers instead of claims. This folder holds a labeled dataset, the scripts that
 | What | Measured? |
 |---|---|
 | PDF reading, ATS checks, keyword matching, ranking without the AI, determinism | **Yes.** See [the latest report](reports/). |
-| AI score consistency, ranking by the AI, latency, tokens, prompt v1 vs v2, median of three | **Yes, on one model: `gemini-3.1-flash-lite`** (60 calls, 2026-10-18). Results below. Not yet on the default model `gemini-3.8-flash`, whose free tier allows only 20 requests a day. |
-| An AI baseline for CI | **No.** It's recorded per model, and which model to ship is still open. |
+| AI score consistency, ranking by the AI, latency, tokens, prompt v1 vs v2, median of three | **Yes, on the default model `gemini-3.1-flash-lite`** (60 calls, 2026-10-18). Results below. Other models aren't measured. |
+| An AI baseline for CI | **Yes**, for prompt v1 on `gemini-3.1-flash-lite` (`baseline.llm.json`). A check on any other model is skipped with a notice. |
 
 ## AI results
 
-Measured on `gemini-3.1-flash-lite`, 6 pairs x 5 repeats x 2 prompts, all 60 runs valid. Full numbers are in the report; the findings are:
+Measured on the default model, `gemini-3.1-flash-lite`, 6 pairs x 5 repeats x 2 prompts, all 60 runs valid. Full numbers are in the report; the findings are:
 
 - **Repeats gave identical scores.** The standard deviation is 0.00 for every score and both prompts, and each pair's five runs matched down to the exact output token count. For identical input this model is deterministic at temperature 0. It could also be provider-side caching; the effect on this test is the same.
 - **So there was no noise to reduce.** A scoring rubric (v2) or a median of three runs can't improve consistency that is already perfect, and the median would triple the cost. This measures sampling noise only. How much the score moves when the *input* changes slightly (a re-exported PDF, different line wrapping) is **not measured**.
@@ -27,7 +27,7 @@ With prompt v1, one resume failed validation on **all 5 runs**: the model left o
 
 ### Running it on a free key
 
-Free Gemini keys are limited per model, and the limits are tight: 5 requests a minute, plus a daily cap (20 requests a day on `gemini-3.8-flash`; the lite model allowed at least 55). The eval copes:
+Free Gemini keys are limited per model, and the limits are tight: 5 requests a minute, plus a daily cap (20 requests a day on `gemini-3.8-flash`; the default lite model allowed at least 55). The eval copes:
 
 - It paces itself (`--rpm`, default 4) and waits when the provider says to.
 - It stops at once on a daily limit instead of making doomed calls.
