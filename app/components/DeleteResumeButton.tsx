@@ -1,40 +1,28 @@
-import {useState} from "react";
-import {usePuterStore} from "~/lib/puter";
-import {deleteResume} from "~/lib/deleteResume";
-import {cn} from "~/lib/util";
+import { useFetcher } from "react-router";
+import { cn } from "~/lib/util";
 
 interface DeleteResumeButtonProps {
-    resume: Pick<Resume, "id" | "resumePath" | "imagePath" | "companyName" | "jobTitle">;
-    onDeleted: () => void;
+    resumeId: string;
+    label: string;
     className?: string;
 }
 
-const DeleteResumeButton = ({ resume, onDeleted, className }: DeleteResumeButtonProps) => {
-    const { fs, kv } = usePuterStore();
-    const [isDeleting, setIsDeleting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
-    const label = resume.companyName || resume.jobTitle || "this resume";
-
-    const handleClick = async () => {
-        if (!window.confirm(`Delete ${label}? This removes the PDF and its analysis permanently.`)) return;
-
-        setIsDeleting(true);
-        setError(null);
-        const result = await deleteResume(resume, { fs, kv });
-        if (result.ok) {
-            onDeleted();
-        } else {
-            setError(result.error);
-            setIsDeleting(false);
-        }
-    };
+const DeleteResumeButton = ({ resumeId, label, className }: DeleteResumeButtonProps) => {
+    const fetcher = useFetcher();
+    const isDeleting = fetcher.state !== "idle";
 
     return (
-        <div className={cn("flex flex-col items-end gap-1", className)}>
+        <fetcher.Form
+            method="post"
+            action={`/resume/${resumeId}`}
+            className={cn(className)}
+            onSubmit={(e) => {
+                if (!window.confirm(`Delete ${label}? This removes the PDF and its analysis permanently.`)) e.preventDefault();
+            }}
+        >
+            <input type="hidden" name="intent" value="delete" />
             <button
-                type="button"
-                onClick={handleClick}
+                type="submit"
                 disabled={isDeleting}
                 aria-label={`Delete ${label}`}
                 className="flex items-center gap-1.5 rounded-full border border-red-200 bg-white/95 px-3 py-1.5 text-sm font-medium text-red-600 shadow-sm cursor-pointer hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
@@ -44,8 +32,7 @@ const DeleteResumeButton = ({ resume, onDeleted, className }: DeleteResumeButton
                 </svg>
                 {isDeleting ? "Deleting…" : "Delete"}
             </button>
-            {error && <p role="alert" className="rounded-md bg-white/95 px-2 py-1 text-xs text-red-600">{error}</p>}
-        </div>
+        </fetcher.Form>
     );
 };
 

@@ -19,12 +19,3 @@ export const validFeedback: Feedback = {
     structure: { score: 75, tips },
     skills: { score: 68, tips },
 };
-
-export const aiResponse = (content: string | unknown[]): AIResponse => ({
-    index: 0,
-    message: { role: "assistant", content: content as AIResponse["message"]["content"], refusal: null, annotations: [] },
-    logprobs: null,
-    finish_reason: "stop",
-    usage: [],
-    via_ai_chat_service: true,
-});

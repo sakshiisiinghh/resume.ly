@@ -1,33 +1,23 @@
 import { describe, expect, it, vi } from "vitest";
-import { analyzeWithRetry, getResponseText } from "~/lib/analyze";
-import { aiResponse, validFeedback } from "../../../test/fixtures";
+import { analyzeWithRetry } from "~/lib/analyze";
+import { validFeedback } from "../../../test/fixtures";
 
-describe("getResponseText", () => {
-    it("handles string content", () => {
-        expect(getResponseText(aiResponse("hello"))).toBe("hello");
-    });
-
-    it("joins text from content blocks", () => {
-        expect(getResponseText(aiResponse([{ type: "text", text: "a" }, { type: "text", text: "b" }]))).toBe("ab");
-    });
-});
+const json = JSON.stringify(validFeedback);
 
 describe("analyzeWithRetry", () => {
     it("returns feedback on the first valid response", async () => {
-        const send = vi.fn().mockResolvedValue(aiResponse(JSON.stringify(validFeedback)));
-        const result = await analyzeWithRetry(send, "analyze");
+        const send = vi.fn().mockResolvedValue(json);
+        const result = await analyzeWithRetry(send);
 
         expect(result).toEqual({ ok: true, feedback: validFeedback, attempts: 1 });
         expect(send).toHaveBeenCalledTimes(1);
+        expect(send).toHaveBeenCalledWith(undefined);
     });
 
     it("retries once with the validation error, then succeeds", async () => {
-        const send = vi
-            .fn()
-            .mockResolvedValueOnce(aiResponse("{ not json"))
-            .mockResolvedValueOnce(aiResponse(JSON.stringify(validFeedback)));
+        const send = vi.fn().mockResolvedValueOnce("{ not json").mockResolvedValueOnce(json);
 
-        const result = await analyzeWithRetry(send, "analyze");
+        const result = await analyzeWithRetry(send);
 
         expect(result.ok).toBe(true);
         expect(result.attempts).toBe(2);
@@ -35,8 +25,8 @@ describe("analyzeWithRetry", () => {
     });
 
     it("stops after maxAttempts and reports the last error", async () => {
-        const send = vi.fn().mockResolvedValue(aiResponse(JSON.stringify({ overallScore: 50 })));
-        const result = await analyzeWithRetry(send, "analyze", 2);
+        const send = vi.fn().mockResolvedValue(JSON.stringify({ overallScore: 50 }));
+        const result = await analyzeWithRetry(send, 2);
 
         expect(send).toHaveBeenCalledTimes(2);
         expect(result.ok).toBe(false);
@@ -44,17 +34,17 @@ describe("analyzeWithRetry", () => {
     });
 
     it("does not retry when the model declines to evaluate", async () => {
-        const send = vi.fn().mockResolvedValue(aiResponse(JSON.stringify({ error: "not a resume" })));
-        const result = await analyzeWithRetry(send, "analyze");
+        const send = vi.fn().mockResolvedValue(JSON.stringify({ error: "not a resume" }));
+        const result = await analyzeWithRetry(send);
 
         expect(send).toHaveBeenCalledTimes(1);
         expect(result.ok).toBe(false);
         if (!result.ok) expect(result.error).toContain("not a resume");
     });
 
-    it("treats a missing response as a failed attempt", async () => {
+    it("treats an empty response as a failed attempt", async () => {
         const send = vi.fn().mockResolvedValue(undefined);
-        const result = await analyzeWithRetry(send, "analyze");
+        const result = await analyzeWithRetry(send);
 
         expect(result).toEqual({ ok: false, error: "No response from the AI service.", attempts: 2 });
     });

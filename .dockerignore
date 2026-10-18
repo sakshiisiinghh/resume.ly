@@ -1,4 +1,7 @@
 .react-router
 build
 node_modules
-README.md
+README.md.env
+storage
+.git
+.claude

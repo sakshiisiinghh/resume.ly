@@ -18,16 +18,8 @@ export function formatSize(bytes: number): string {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-export const generateUUID = () => crypto.randomUUID();
-
 export function safeRedirect(target: string | null | undefined, fallback = "/"): string {
     if (!target || !target.startsWith("/")) return fallback;
     if (target.startsWith("//") || target.startsWith("/\\")) return fallback;
     return target;
-}
-
-// Records saved before statuses existed have no `status`.
-export function getResumeStatus(resume: Pick<Resume, "status" | "feedback">): ResumeStatus {
-    if (resume.status) return resume.status;
-    return resume.feedback && typeof resume.feedback === "object" ? "done" : "failed";
 }

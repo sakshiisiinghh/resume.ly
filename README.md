@@ -1,7 +1,7 @@
 # <h1 align="center">📄 **Resume.ly** – AI-Powered ATS Resume Analyzer</h1>
 
 <p align="center">
-  <strong>An intelligent, serverless resume analysis platform that scans resumes, calculates ATS compatibility scores, and provides actionable, job-specific improvement feedback.</strong>
+  <strong>An intelligent resume analysis platform that scans resumes, calculates ATS compatibility scores, and provides actionable, job-specific improvement feedback.</strong>
 </p>
 
 <p align="center">
@@ -25,7 +25,7 @@
 
 **Resume.ly** helps job seekers bridge the gap between their experience and automated hiring systems. Over **75% of resumes** are rejected by ATS systems before ever reaching a human recruiter; Resume.ly levels the playing field.
 
-Built using a modern **React + TypeScript + Serverless** architecture, the platform eliminates the need for traditional backend management while maintaining high performance and security.
+Built with **React Router v7 on Node**, uploads are processed asynchronously by a **BullMQ worker**, persisted in **PostgreSQL**, and streamed back to the browser over **Server-Sent Events**.
 
 ### 🛠️ The Workflow
 1. **Upload:** Drop your resume as a PDF (up to 20 MB).
@@ -39,8 +39,9 @@ Built using a modern **React + TypeScript + Serverless** architecture, the platf
 
 * **📊 ATS Compatibility Score:** Gemini scores the resume out of 100 for ATS suitability, tone & style, content, structure and skills, each with specific tips.
 * **🎯 Job-Specific Feedback:** The job title and description are part of the prompt, so feedback targets the role you're applying for.
-* **☁️ Secure Storage:** Analyzed resumes are saved to your own **Puter.js** cloud storage, and you can delete any of them.
-* **🔐 Serverless Auth:** Fully browser-based authentication, with no traditional database or backend required.
+* **☁️ Private Storage:** Every resume, analysis and file is scoped to its owner; other users get a 404. You can delete any of your resumes.
+* **🔐 Real Auth:** Argon2-hashed passwords and database-backed sessions in HttpOnly cookies.
+* **⚙️ Durable Jobs:** Idempotent submissions, retries with backoff, error classification and crash recovery.
 * **🛡️ Validated AI Output:** Model responses are checked against a Zod schema, retried once if malformed, and never saved as a fake score.
 * **🎨 Modern UI/UX:** A clean, responsive interface built with **Tailwind CSS** and **Vite** for lightning-fast interactions.
 
@@ -50,15 +51,15 @@ Built using a modern **React + TypeScript + Serverless** architecture, the platf
 
 | Layer | Technology |
 | :--- | :--- |
-| **Frontend** | React, TypeScript, React Router v7 |
-| **State Management** | Zustand |
-| **Styling** | Tailwind CSS |
-| **AI** | Gemini (`google/gemini-3.5-flash`) via Puter.js |
+| **Frontend** | React, TypeScript, React Router v7, Tailwind CSS |
+| **Server** | Node.js (React Router loaders, actions, resource routes) |
+| **Database** | PostgreSQL + Drizzle ORM |
+| **Queue & Worker** | BullMQ + Redis, separate Node worker process |
+| **AI** | Gemini via `@google/genai` behind an `LLMProvider` interface |
+| **PDF** | `pdfjs-dist` for text extraction, `@napi-rs/canvas` for thumbnails |
 | **Validation** | Zod |
-| **Serverless/Cloud** | Puter.com (Auth, Storage, KV, AI gateway) |
 | **Testing & CI** | Vitest, React Testing Library, GitHub Actions |
-| **Build Tool** | Vite |
-| **Deployment** | Vercel |
+| **Infra** | Docker, Docker Compose |
 
 ---
 
@@ -67,20 +68,20 @@ Built using a modern **React + TypeScript + Serverless** architecture, the platf
 <details>
 <summary><strong>Click to view Technical Pipeline</strong></summary>
 
-### 1️⃣ Resume Parsing
-The PDF's text is extracted in the browser with `pdfjs-dist`. Image-only PDFs with no selectable text are rejected up front, since an ATS can't read them either. Page 1 is also rendered to an image for the preview.
+### 1️⃣ Upload
+The upload action validates the file (size and `%PDF-` magic bytes), stores it under an owner-scoped key, and computes an idempotency key from the user, file hash, job title, job description, prompt version and model. A repeated submission returns the existing analysis instead of running again. The action then enqueues a job and redirects immediately.
 
-### 2️⃣ Storage
-The PDF and preview image are uploaded to Puter cloud storage. A record with `status: "processing"` is saved to Puter KV.
+### 2️⃣ Worker
+A separate process picks up the job, extracts text from every page, renders a WebP thumbnail, and calls Gemini at temperature 0 with the resume text in the user turn, apart from the instructions. Each step updates the analysis stage and publishes progress.
 
-### 3️⃣ AI Analysis
-The resume text, job title and job description go to Gemini at temperature 0 with a structured JSON format. Resume text is delimited in the prompt and treated as data, not instructions.
+### 3️⃣ Validation and failures
+Model output is validated with Zod. Malformed output gets one retry with the validation error. Declined or all-zero responses fail the analysis instead of saving a fake score. Transient errors (network, 429, 5xx) retry with exponential backoff; permanent ones (invalid PDF, no text layer, bad credentials) fail immediately.
 
-### 4️⃣ Validation
-The response is validated with Zod. Malformed output gets one retry that includes the validation error. If the model declines, or returns all-zero scores, the analysis is marked `failed` instead of showing a score.
+### 4️⃣ Recovery
+A repeatable job reconciles the database with the queue: analyses stuck in `processing` with no heartbeat are re-queued or failed.
 
-### 5️⃣ Feedback
-The results page shows the overall score, ATS score and per-category tips from the validated response.
+### 5️⃣ Progress
+The review page subscribes to an SSE stream (current state first, then live updates) and falls back to polling if the stream drops.
 </details>
 
 ---
@@ -90,18 +91,16 @@ The results page shows the overall score, ATS score and per-category tips from t
 ```text
 resume-ly/
 ├── app/
-│   ├── components/    # UI components (score gauges, accordion, uploader, cards)
-│   ├── routes/        # Pages: home, auth, upload, resume/:id, wipe
-│   ├── lib/           # Puter store, PDF parsing, Zod schema, analysis + delete logic
-│   └── root.tsx
+│   ├── .server/       # Server-only: db, auth, queue, storage, LLM, jobs, PDF
+│   ├── components/    # UI components
+│   ├── routes/        # Pages and resource routes (files, SSE)
+│   └── lib/           # Shared: Zod schema, analysis retry, helpers
+├── worker/            # BullMQ worker entrypoint
+├── drizzle/           # SQL migrations
 ├── constants/         # AI prompt and response format
-├── types/             # Global and Puter type declarations
-├── test/              # Test setup and fixtures
-├── public/            # Static assets and the pdf.js worker
-├── .github/workflows/ # CI: typecheck, test, build
-├── react-router.config.ts
-├── vite.config.ts
-└── vitest.config.ts
+├── test/              # Test setup, fixtures, PDF builder
+├── docker-compose.yml
+└── Dockerfile
 ```
 
 ---
@@ -109,8 +108,17 @@ resume-ly/
 ## ⚙️ Getting Started
 
 ```bash
+cp .env.example .env          # set SESSION_SECRET and GEMINI_API_KEY
+docker compose up -d postgres redis
 npm install
-npm run dev        # http://localhost:5173
-npm test           # unit and component tests
+npm run db:migrate
+npm run dev                   # http://localhost:5173
+npm run worker                # in a second terminal
+```
+
+Or run everything in containers: `docker compose up --build`.
+
+```bash
+npm test            # unit tests; server tests also need Postgres from compose
 npm run typecheck
 ```

@@ -1,10 +1,11 @@
-import type { Route } from "./+types/home";
+import { Link } from "react-router";
 import Navbar from "~/components/Navbar";
 import ResumeCard from "~/components/ResumeCard";
-import {usePuterStore} from "~/lib/puter";
-import {Link, useNavigate} from "react-router";
-import {useEffect, useState} from "react";
+import { requireUser } from "~/.server/auth";
+import { listResumes } from "~/.server/resumes";
+import type { Route } from "./+types/home";
 
+const PAGE_SIZE = 12;
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -13,70 +14,57 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-export default function Home() {
-  const{auth,isLoading,kv}=usePuterStore();
-  const navigate = useNavigate();
-  const [resumes, setResumes] = useState<Resume[]>([]);
-  const [loadingResumes, setLoadingResumes] = useState(false);
+export async function loader({ request }: Route.LoaderArgs) {
+  const user = await requireUser(request);
+  const page = Math.max(1, Number(new URL(request.url).searchParams.get("page")) || 1);
+  const { items, hasNext } = await listResumes(user.id, page, PAGE_SIZE);
 
-  useEffect(() => {
-    if(!isLoading && !auth.isAuthenticated) navigate('/auth?next=/');
-  }, [isLoading, auth.isAuthenticated, navigate])
+  return {
+    page,
+    hasNext,
+    resumes: items.map(({ resume, analysis }) => ({
+      id: resume.id,
+      companyName: resume.companyName,
+      jobTitle: resume.jobTitle,
+      hasThumbnail: Boolean(resume.thumbKey),
+      status: analysis.status,
+      score: analysis.finalScore,
+    })),
+  };
+}
 
-  useEffect(() => {
-    if (!auth.isAuthenticated) return;
-
-    const loadResumes = async () => {
-      setLoadingResumes(true);
-
-      const resumes = (await kv.list('resume:*', true)) as KVItem[];
-
-      const parsedResumes = (resumes ?? []).flatMap((resume) => {
-        try {
-          return [JSON.parse(resume.value) as Resume];
-        } catch {
-          return [];
-        }
-      });
-
-      setResumes(parsedResumes);
-      setLoadingResumes(false);
-    }
-
-    loadResumes()
-  }, [auth.isAuthenticated]);
-
+export default function Home({ loaderData }: Route.ComponentProps) {
+  const { resumes, page, hasNext } = loaderData;
+  const isEmpty = resumes.length === 0 && page === 1;
 
   return <main className="bg-[url('/images/bg-main.svg')] bg-cover">
     <Navbar />
     <section className="main-section">
       <div className="page-heading py-16">
         <h1>Track Your Applications & Resume Ratings</h1>
-        {!loadingResumes && resumes?.length === 0 ? (
+        {isEmpty ? (
             <h2>No resumes found. Upload your first resume to get feedback.</h2>
         ): (
             <h2>Review your submissions and check AI-powered feedback.</h2>
         )}
       </div>
-      {loadingResumes && (
-          <div className="flex flex-col items-center justify-center">
-            <img src="/images/resume-scan-2.gif" className="w-[200px]" />
-          </div>
-      )}
 
-      {!loadingResumes && resumes.length > 0 && (
+      {resumes.length > 0 && (
           <div className="resumes-section">
             {resumes.map((resume) => (
-                <ResumeCard
-                    key={resume.id}
-                    resume={resume}
-                    onDeleted={(id) => setResumes((prev) => prev.filter((r) => r.id !== id))}
-                />
+                <ResumeCard key={resume.id} resume={resume} />
             ))}
           </div>
       )}
 
-      {!loadingResumes && resumes?.length === 0 && (
+      {(page > 1 || hasNext) && (
+          <div className="flex items-center gap-4">
+            {page > 1 && <Link to={`/?page=${page - 1}`} className="back-button">Previous</Link>}
+            {hasNext && <Link to={`/?page=${page + 1}`} className="back-button">Next</Link>}
+          </div>
+      )}
+
+      {isEmpty && (
           <div className="flex flex-col items-center justify-center mt-10 gap-4">
             <Link to="/upload" className="primary-button w-fit text-xl font-semibold">
               Upload Resume

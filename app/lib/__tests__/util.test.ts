@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatSize, getResumeStatus, safeRedirect } from "~/lib/util";
-import { validFeedback } from "../../../test/fixtures";
+import { formatSize, safeRedirect } from "~/lib/util";
 
 describe("formatSize", () => {
     it.each([
@@ -26,18 +25,4 @@ describe("safeRedirect", () => {
             expect(safeRedirect(target)).toBe("/");
         }
     );
-});
-
-describe("getResumeStatus", () => {
-    it("uses an explicit status", () => {
-        expect(getResumeStatus({ status: "processing", feedback: null })).toBe("processing");
-    });
-
-    it("treats legacy records with feedback as done", () => {
-        expect(getResumeStatus({ feedback: validFeedback })).toBe("done");
-    });
-
-    it("treats legacy placeholder records (feedback: '') as failed, not a score", () => {
-        expect(getResumeStatus({ feedback: "" as unknown as null })).toBe("failed");
-    });
 });
