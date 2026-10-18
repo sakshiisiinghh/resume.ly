@@ -28,19 +28,20 @@
 Built using a modern **React + TypeScript + Serverless** architecture, the platform eliminates the need for traditional backend management while maintaining high performance and security.
 
 ### 🛠️ The Workflow
-1. **Upload:** Drop your resume in PDF/Doc format.
+1. **Upload:** Drop your resume as a PDF (up to 20 MB).
 2. **Match:** Paste the Target Job Description.
-3. **Analyze:** Receive a structured ATS compatibility score.
+3. **Analyze:** Receive an ATS compatibility score plus scores for tone, content, structure and skills.
 4. **Optimize:** Follow specific, AI-driven suggestions to improve ranking.
 
 ---
 
 ## ✨ Core Features
 
-* **📊 ATS Compatibility Score:** Generates a weighted score based on keyword matching, skills alignment, and structural formatting.
-* **🎯 AI-Powered Matching:** Performs deep gap analysis to identify missing hard/soft skills required for specific roles.
-* **☁️ Secure Storage:** Save and manage multiple resume versions via **Puter.js** cloud integration.
-* **🔐 Serverless Auth:** Fully browser-based authentication—no traditional database or backend required.
+* **📊 ATS Compatibility Score:** Gemini scores the resume out of 100 for ATS suitability, tone & style, content, structure and skills, each with specific tips.
+* **🎯 Job-Specific Feedback:** The job title and description are part of the prompt, so feedback targets the role you're applying for.
+* **☁️ Secure Storage:** Analyzed resumes are saved to your own **Puter.js** cloud storage, and you can delete any of them.
+* **🔐 Serverless Auth:** Fully browser-based authentication, with no traditional database or backend required.
+* **🛡️ Validated AI Output:** Model responses are checked against a Zod schema, retried once if malformed, and never saved as a fake score.
 * **🎨 Modern UI/UX:** A clean, responsive interface built with **Tailwind CSS** and **Vite** for lightning-fast interactions.
 
 ---
@@ -52,7 +53,10 @@ Built using a modern **React + TypeScript + Serverless** architecture, the platf
 | **Frontend** | React, TypeScript, React Router v7 |
 | **State Management** | Zustand |
 | **Styling** | Tailwind CSS |
-| **Serverless/Cloud** | Puter.com (Auth, Storage, AI Integration) |
+| **AI** | Gemini (`google/gemini-3.5-flash`) via Puter.js |
+| **Validation** | Zod |
+| **Serverless/Cloud** | Puter.com (Auth, Storage, KV, AI gateway) |
+| **Testing & CI** | Vitest, React Testing Library, GitHub Actions |
 | **Build Tool** | Vite |
 | **Deployment** | Vercel |
 
@@ -64,22 +68,19 @@ Built using a modern **React + TypeScript + Serverless** architecture, the platf
 <summary><strong>Click to view Technical Pipeline</strong></summary>
 
 ### 1️⃣ Resume Parsing
-The system extracts raw text and identifies key sections (Skills, Education, Experience) using client-side processing.
+The PDF's text is extracted in the browser with `pdfjs-dist`. Image-only PDFs with no selectable text are rejected up front, since an ATS can't read them either. Page 1 is also rendered to an image for the preview.
 
-### 2️⃣ Job Description Analysis
-The AI parses the job posting to identify "Must-Have" vs "Nice-to-Have" competencies.
+### 2️⃣ Storage
+The PDF and preview image are uploaded to Puter cloud storage. A record with `status: "processing"` is saved to Puter KV.
 
-### 3️⃣ The Scoring Engine
-A custom algorithm calculates the final score based on:
-- **Keyword Match:** Presence of industry-standard terms.
-- **Skills Alignment:** Direct overlap with job requirements.
-- **Structural Compliance:** Check for ATS-friendly formatting.
+### 3️⃣ AI Analysis
+The resume text, job title and job description go to Gemini at temperature 0 with a structured JSON format. Resume text is delimited in the prompt and treated as data, not instructions.
 
-### 4️⃣ Feedback Generation
-The system produces actionable tips, such as:
-- Suggestions for stronger **Action Verbs**.
-- Guidance on **Quantifiable Achievements**.
-- Missing keyword alerts.
+### 4️⃣ Validation
+The response is validated with Zod. Malformed output gets one retry that includes the validation error. If the model declines, or returns all-zero scores, the analysis is marked `failed` instead of showing a score.
+
+### 5️⃣ Feedback
+The results page shows the overall score, ATS score and per-category tips from the validated response.
 </details>
 
 ---
@@ -88,13 +89,28 @@ The system produces actionable tips, such as:
 
 ```text
 resume-ly/
-├── src/
-│   ├── components/    # Reusable UI components
-│   ├── pages/         # View/Route definitions
-│   ├── store/         # Zustand state logic
-│   ├── utils/         # Scoring algorithms & parsers
-│   └── assets/        # Static files & icons
-├── public/
-├── package.json
+├── app/
+│   ├── components/    # UI components (score gauges, accordion, uploader, cards)
+│   ├── routes/        # Pages: home, auth, upload, resume/:id, wipe
+│   ├── lib/           # Puter store, PDF parsing, Zod schema, analysis + delete logic
+│   └── root.tsx
+├── constants/         # AI prompt and response format
+├── types/             # Global and Puter type declarations
+├── test/              # Test setup and fixtures
+├── public/            # Static assets and the pdf.js worker
+├── .github/workflows/ # CI: typecheck, test, build
+├── react-router.config.ts
 ├── vite.config.ts
-└── tsconfig.json
+└── vitest.config.ts
+```
+
+---
+
+## ⚙️ Getting Started
+
+```bash
+npm install
+npm run dev        # http://localhost:5173
+npm test           # unit and component tests
+npm run typecheck
+```
