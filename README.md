@@ -37,7 +37,8 @@ Built with **React Router v7 on Node**, uploads are processed asynchronously by 
 
 ## ✨ Core Features
 
-* **📊 ATS Compatibility Score:** Gemini scores the resume out of 100 for ATS suitability, tone & style, content, structure and skills, each with specific tips.
+* **📊 Explainable ATS Engine:** Deterministic checks (layout, reading order, sections, contact info, dates, hidden text) and job-description keyword matching produce an ATS readiness score, with the evidence for every point deducted.
+* **🧠 AI Feedback:** Gemini scores tone & style, content, structure and skills with specific tips. The overall score blends the engine and the AI, and the page shows the breakdown.
 * **🎯 Job-Specific Feedback:** The job title and description are part of the prompt, so feedback targets the role you're applying for.
 * **☁️ Private Storage:** Every resume, analysis and file is scoped to its owner; other users get a 404. You can delete any of your resumes.
 * **🔐 Real Auth:** Argon2-hashed passwords and database-backed sessions in HttpOnly cookies.
@@ -72,7 +73,10 @@ Built with **React Router v7 on Node**, uploads are processed asynchronously by 
 The upload action validates the file (size and `%PDF-` magic bytes), stores it under an owner-scoped key, and computes an idempotency key from the user, file hash, job title, job description, prompt version and model. A repeated submission returns the existing analysis instead of running again. The action then enqueues a job and redirects immediately.
 
 ### 2️⃣ Worker
-A separate process picks up the job, extracts text from every page, renders a WebP thumbnail, and calls Gemini at temperature 0 with the resume text in the user turn, apart from the instructions. Each step updates the analysis stage and publishes progress.
+A separate process picks up the job, extracts text and glyph positions from every page, renders a WebP thumbnail, and runs the deterministic ATS engine. It then calls Gemini at temperature 0 with the resume text in the user turn, apart from the instructions. Each step updates the analysis stage and publishes progress.
+
+### 2️⃣b ATS engine
+Pure functions over the extracted document: column and reading-order detection from text positions, section headings (fuzzy matched), contact details, date formats and ranges, page and font checks, tiny hidden text, and instruction-like phrases. Keywords come from a curated skills dictionary with aliases, split into required and nice-to-have. The same input always gives the same report. These are heuristics, not any employer's real ATS.
 
 ### 3️⃣ Validation and failures
 Model output is validated with Zod. Malformed output gets one retry with the validation error. Declined or all-zero responses fail the analysis instead of saving a fake score. Transient errors (network, 429, 5xx) retry with exponential backoff; permanent ones (invalid PDF, no text layer, bad credentials) fail immediately.

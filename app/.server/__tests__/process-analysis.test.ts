@@ -3,13 +3,14 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "~/.server/db";
 import { analyses, resumes } from "~/.server/db/schema";
 import { PermanentError, TransientError } from "~/.server/jobs/errors";
+import { atsReportSchema } from "~/lib/ats";
 import { processAnalysis, recordFailure } from "~/.server/jobs/process-analysis";
 import type { LLMProvider } from "~/.server/llm";
 import { getResume, submitResume } from "~/.server/resumes";
 import { closeDb, createUser, hasTestDb, resetDb } from "../../../test/db";
 import { validFeedback } from "../../../test/fixtures";
 import { MemoryStorage } from "../../../test/memory-storage";
-import { makePdf, resumeLines } from "../../../test/pdf";
+import { buildPdf, cleanResumeLines, columnItems, makePdf, resumeLines } from "../../../test/pdf";
 
 afterAll(closeDb);
 
@@ -18,10 +19,10 @@ const publish = vi.fn().mockResolvedValue(undefined);
 const generate = vi.fn();
 const llm: LLMProvider = { model: "test-model", generate };
 
-const submit = async (bytes: Buffer) => {
+const submit = async (bytes: Buffer, jobDescription = "Go") => {
     const user = await createUser();
     const { resumeId } = await submitResume(
-        { userId: user.id, fileName: "r.pdf", bytes, companyName: "", jobTitle: "Backend Engineer", jobDescription: "Go" },
+        { userId: user.id, fileName: "r.pdf", bytes, companyName: "", jobTitle: "Backend Engineer", jobDescription },
         { storage, enqueue: vi.fn().mockResolvedValue(undefined), publish, model: "test-model" }
     );
     const found = (await getResume(user.id, resumeId))!;
@@ -41,21 +42,51 @@ describe.skipIf(!hasTestDb)("processAnalysis", () => {
 
     it("analyzes a resume end to end", async () => {
         generate.mockResolvedValue({ text: JSON.stringify(validFeedback), tokensIn: 120, tokensOut: 340 });
-        const { analysis, resume } = await submit(makePdf(resumeLines));
+        const { analysis, resume } = await submit(buildPdf([{ items: columnItems(cleanResumeLines) }]), "Go, Docker and Kubernetes");
 
         await run(analysis.id);
 
         const done = await reload(analysis.id);
-        expect(done).toMatchObject({ status: "done", stage: null, finalScore: 72, attempts: 1, tokensIn: 120, tokensOut: 340 });
+        // parseability 100 and keywords 100 at 0.3 each, AI quality 72 at 0.4
+        expect(done).toMatchObject({ status: "done", stage: null, finalScore: 89, attempts: 1, tokensIn: 120, tokensOut: 340 });
         expect(done.llmFeedback).toEqual(validFeedback);
         expect(done.finishedAt).not.toBeNull();
+
+        const report = atsReportSchema.parse(done.atsReport);
+        expect(report.parseability).toBe(100);
+        expect(report.keywords?.coverage).toBe(100);
+        expect(report.scoring).toMatchObject({ final: 89, atsReadiness: 100 });
 
         const [updated] = await db.select().from(resumes).where(eq(resumes.id, resume.id));
         expect(updated.pageCount).toBe(1);
         expect(updated.thumbKey).toBe(`users/${resume.userId}/${resume.id}.webp`);
         expect(storage.files.get(updated.thumbKey!)!.subarray(8, 12).toString()).toBe("WEBP");
 
-        expect(publish.mock.calls.map(([, e]) => e.stage ?? e.status)).toEqual(["extracting", "analyzing", "scoring", "done"]);
+        expect(publish.mock.calls.map(([, e]) => e.stage ?? e.status)).toEqual(["extracting", "checking", "analyzing", "scoring", "done"]);
+    });
+
+    it("saves the deterministic report before asking the AI, so a model failure keeps it", async () => {
+        generate.mockRejectedValue(new TransientError("The AI service is temporarily unavailable.", "llm_unavailable"));
+        const { analysis } = await submit(buildPdf([{ items: columnItems(cleanResumeLines) }]), "Go");
+
+        await expect(run(analysis.id)).rejects.toBeInstanceOf(TransientError);
+
+        const saved = atsReportSchema.parse((await reload(analysis.id)).atsReport);
+        expect(saved.parseability).toBe(100);
+        expect(saved.scoring).toBeNull();
+    });
+
+    it("flags a resume that hides keywords in tiny text", async () => {
+        generate.mockResolvedValue({ text: JSON.stringify(validFeedback) });
+        const items = [...columnItems(cleanResumeLines), { text: "kafka terraform", x: 50, y: 30, size: 1 }];
+        const { analysis } = await submit(buildPdf([{ items }]), "Requirements:\nGo\nNice to have:\nKafka");
+
+        await run(analysis.id);
+
+        const report = atsReportSchema.parse((await reload(analysis.id)).atsReport);
+        expect(report.checks.find((c) => c.id === "hidden-text")!.severity).toBe("warning");
+        expect(report.keywords!.nice.missing).toEqual(["Kafka"]);
+        expect(generate.mock.calls[0][0].user).not.toContain("kafka terraform");
     });
 
     it("keeps resume text in the user turn, away from the instructions", async () => {

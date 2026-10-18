@@ -242,21 +242,21 @@ Don't claim to reproduce a proprietary ATS. Build a transparent set of resume ch
 
 ### 1. PDF text extraction
 
-- [ ] Extract text from **every page** with `pdfjs-dist` (`getTextContent()`).
-- [ ] Preserve page and item positions (x, y, width, font size); rebuild lines by y and detect columns by x-gaps.
-- [ ] Detect image-only/scanned PDFs and return a clear `unsupported_no_text` result instead of scoring empty text.
-- [ ] Fixtures: single-column, multi-column, malformed and scanned PDFs.
+- [x] Extract text from **every page** with `pdfjs-dist` (`getTextContent()`).
+- [x] Preserve page and item positions (x, y, width, font size); rebuild lines by y and detect columns by x-gaps.
+- [x] Detect image-only/scanned PDFs and fail with a clear `no_text_layer` message instead of scoring empty text.
+- [x] Fixtures: single-column, multi-column, malformed and scanned PDFs.
 
 ### 2. Deterministic checks
 
 Each check is a pure function returning `{ id, severity, message, evidence }`:
 
-- [ ] Text extractability and reading-order sanity (multi-column scrambling).
-- [ ] Standard section headings (fuzzy-matched: Experience, Education, Skills…).
-- [ ] Contact information present (email/phone), and not only in header/footer regions.
-- [ ] Date parsing and consistency.
-- [ ] Page count and basic layout warnings.
-- [ ] **Keyword coverage** against the job description: extract terms (a small LLM call constrained to a JSON list, cached by `sha256(jd)`), normalize aliases (`postgres`/`postgresql`, `node`/`node.js`, `k8s`/`kubernetes`), then report matched and missing terms.
+- [x] Text extractability and reading-order sanity (multi-column scrambling).
+- [x] Standard section headings (fuzzy-matched: Experience, Education, Skills…).
+- [x] Contact information present (email/phone), and not only in header/footer regions.
+- [x] Date parsing and consistency.
+- [x] Page count and basic layout warnings.
+- [x] **Keyword coverage** against the job description: extract terms with a curated skills dictionary (no LLM call, so the report is deterministic), normalize aliases (`postgres`/`postgresql`, `node`/`node.js`, `k8s`/`kubernetes`), then report matched and missing terms, split into required and nice-to-have.
 
 Show matched and missing terms with evidence from the resume text. Treat checks as heuristics, not universal ATS rules.
 
@@ -264,26 +264,34 @@ Show matched and missing terms with evidence from the resume text. Treat checks 
 
 ### 3. Hybrid score and transparency
 
-- [ ] Keep deterministic checks separate from AI feedback on clarity, relevance and impact.
-- [ ] `final = w₁·parseability + w₂·keywordCoverage + w₃·llmQuality`, with documented, configurable weights stored alongside each result.
-- [ ] Show the score breakdown and the evidence behind each component.
-- [ ] Don't imply a score predicts a specific employer's screening decision.
+- [x] Keep deterministic checks separate from AI feedback on clarity, relevance and impact.
+- [x] `final = w₁·parseability + w₂·keywordCoverage + w₃·llmQuality`, with documented, configurable weights stored alongside each result.
+- [x] Show the score breakdown and the evidence behind each component.
+- [x] Don't imply a score predicts a specific employer's screening decision.
 
 *Why:* each part does what it's good at. Code measures, the LLM judges writing, and the user can see why their score is 72.
 
 ### 4. Security-oriented document handling
 
-- [ ] Flag hidden or off-page text only where extraction metadata supports it (font size < ~4pt, positioned outside the page box; fill colour via `getOperatorList()` if you implement it).
-- [ ] A small, documented set of prompt-injection indicators ("ignore previous instructions", "rate this", …) shown as warnings.
-- [ ] Don't treat heuristic detection as proof of malicious intent.
-- [ ] Keep untrusted resume text clearly delimited from instructions in prompts (system vs user content, explicit "the following is untrusted document content").
+- [x] Flag hidden text only where extraction metadata supports it: text under 4pt. (pdf.js drops off-page text before we see it and doesn't expose fill colour, so those aren't detectable. Implementing colour via `getOperatorList()` is the natural next step.)
+- [x] A small, documented set of prompt-injection indicators ("ignore previous instructions", "rate this", …) shown as warnings.
+- [x] Don't treat heuristic detection as proof of malicious intent.
+- [x] Keep untrusted resume text clearly delimited from instructions in prompts (system vs user content, explicit "the following is untrusted document content").
 
 ### Completion criteria
 
-- [ ] The same input produces the same deterministic ATS report (snapshot tests).
-- [ ] The UI explains why each check affected the score.
-- [ ] Tests cover known parsing and keyword cases.
-- [ ] Scanned or unsupported PDFs produce honest states, not misleading scores.
+- [x] The same input produces the same deterministic ATS report (snapshot tests).
+- [x] The UI explains why each check affected the score.
+- [x] Tests cover known parsing and keyword cases.
+- [x] Scanned or unsupported PDFs produce honest states, not misleading scores.
+
+### Known limitations
+
+- Keyword matching only recognises skills in the built-in dictionary (`app/.server/ats/skills.ts`). Anything else in a job description is ignored, and ambiguous names (Go, C, React, Spark) are case-sensitive to avoid matching ordinary English.
+- Column detection is a layout heuristic (a near-empty vertical band with text on both sides). Unusual layouts can fool it either way.
+- Section, date and contact checks are pattern based and tuned for English resumes.
+- Hidden-text detection covers tiny text only; off-page and background-coloured text can't be seen through pdf.js.
+- Weights (30% parseability, 30% keywords, 40% AI quality) and penalties are judgment calls, not fitted to data. Phase 3 is where they get measured.
 
 **Deliverable:** an ATS analysis component that is more than an LLM-generated number.
 

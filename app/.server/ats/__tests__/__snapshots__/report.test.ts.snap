@@ -1,0 +1,200 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildAtsReport > matches the golden report for a clean resume 1`] = `
+{
+  "checks": [
+    {
+      "evidence": [],
+      "id": "readable-text",
+      "message": "Text can be extracted: 870 characters over 1 page.",
+      "penalty": 0,
+      "severity": "ok",
+      "title": "Readable text",
+    },
+    {
+      "evidence": [],
+      "id": "columns",
+      "message": "No multi-column layout detected.",
+      "penalty": 0,
+      "severity": "ok",
+      "title": "Single-column layout",
+    },
+    {
+      "evidence": [],
+      "id": "reading-order",
+      "message": "Text flows in a natural reading order.",
+      "penalty": 0,
+      "severity": "ok",
+      "title": "Reading order",
+    },
+    {
+      "evidence": [
+        "Found: Education, Experience, Projects, Skills",
+      ],
+      "id": "sections",
+      "message": "The expected section headings are present.",
+      "penalty": 0,
+      "severity": "ok",
+      "title": "Standard sections",
+    },
+    {
+      "evidence": [
+        "jane.doe@example.com",
+      ],
+      "id": "contact-email",
+      "message": "An email address is present.",
+      "penalty": 0,
+      "severity": "ok",
+      "title": "Email address",
+    },
+    {
+      "evidence": [
+        "+1 415 555 0123",
+      ],
+      "id": "contact-phone",
+      "message": "A phone number is present.",
+      "penalty": 0,
+      "severity": "ok",
+      "title": "Phone number",
+    },
+    {
+      "evidence": [
+        "github.com/janedoe",
+      ],
+      "id": "contact-links",
+      "message": "A profile or portfolio link is present.",
+      "penalty": 0,
+      "severity": "ok",
+      "title": "Profile links",
+    },
+    {
+      "evidence": [],
+      "id": "date-format",
+      "message": "Dates use a consistent format.",
+      "penalty": 0,
+      "severity": "ok",
+      "title": "Consistent date format",
+    },
+    {
+      "evidence": [],
+      "id": "date-ranges",
+      "message": "Date ranges run forwards in time.",
+      "penalty": 0,
+      "severity": "ok",
+      "title": "Valid date ranges",
+    },
+    {
+      "evidence": [],
+      "id": "page-count",
+      "message": "1 page.",
+      "penalty": 0,
+      "severity": "ok",
+      "title": "Page count",
+    },
+    {
+      "evidence": [],
+      "id": "text-density",
+      "message": "About 870 characters per page.",
+      "penalty": 0,
+      "severity": "ok",
+      "title": "Text density",
+    },
+    {
+      "evidence": [],
+      "id": "font-size",
+      "message": "Typical font size 11pt.",
+      "penalty": 0,
+      "severity": "ok",
+      "title": "Font size",
+    },
+    {
+      "evidence": [],
+      "id": "hidden-text",
+      "message": "No unreadably small text found.",
+      "penalty": 0,
+      "severity": "ok",
+      "title": "Hidden text",
+    },
+    {
+      "evidence": [],
+      "id": "prompt-injection",
+      "message": "No instruction-like phrases found.",
+      "penalty": 0,
+      "severity": "ok",
+      "title": "Instruction-like phrases",
+    },
+    {
+      "evidence": [],
+      "id": "keyword-coverage",
+      "message": "8 of 10 skills from the job description appear in your resume.",
+      "penalty": 0,
+      "severity": "ok",
+      "title": "Job keyword match",
+    },
+  ],
+  "keywords": {
+    "coverage": 89,
+    "nice": {
+      "matched": [],
+      "missing": [
+        "Kafka",
+        "Terraform",
+      ],
+    },
+    "required": {
+      "matched": [
+        {
+          "count": 2,
+          "evidence": "Built Go services on PostgreSQL and Redis that process 2M payments…",
+          "term": "Go",
+        },
+        {
+          "count": 2,
+          "evidence": "Built Go services on PostgreSQL and Redis that process 2M payments a day.",
+          "term": "PostgreSQL",
+        },
+        {
+          "count": 2,
+          "evidence": "Built Go services on PostgreSQL and Redis that process 2M payments a day.",
+          "term": "Redis",
+        },
+        {
+          "count": 3,
+          "evidence": "Wrote Python tooling and CI/CD pipelines with Docker and GitHub Actions.",
+          "term": "Docker",
+        },
+        {
+          "count": 2,
+          "evidence": "Designed REST APIs and gRPC services deployed with Kubernetes on AWS.",
+          "term": "Kubernetes",
+        },
+        {
+          "count": 1,
+          "evidence": "…ned REST APIs and gRPC services deployed with Kubernetes on AWS.",
+          "term": "AWS",
+        },
+        {
+          "count": 4,
+          "evidence": "Designed REST APIs and gRPC services deployed with Kubernetes on AWS.",
+          "term": "REST APIs",
+        },
+        {
+          "count": 1,
+          "evidence": "Designed REST APIs and gRPC services deployed with Kubernetes on AWS.",
+          "term": "gRPC",
+        },
+      ],
+      "missing": [],
+    },
+  },
+  "parseability": 100,
+  "scoring": null,
+  "stats": {
+    "charCount": 870,
+    "columnPages": [],
+    "medianFontSize": 11,
+    "pageCount": 1,
+  },
+  "version": 1,
+}
+`;

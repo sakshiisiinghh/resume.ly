@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Link, data, redirect, useRevalidator } from "react-router";
 import ATS from "~/components/ATS";
+import AtsReport from "~/components/AtsReport";
 import DeleteResumeButton from "~/components/DeleteResumeButton";
 import Details from "~/components/Details";
 import Summary from "~/components/Summary";
@@ -8,6 +9,7 @@ import { assertSameOrigin, requireUser } from "~/.server/auth";
 import { enqueueAnalysis } from "~/.server/queue";
 import { deleteResume, getResume, retryAnalysis } from "~/.server/resumes";
 import { getStorage } from "~/.server/storage";
+import { atsReportSchema } from "~/lib/ats";
 import { FeedbackSchema } from "~/lib/schemas";
 import type { Route } from "./+types/resume";
 
@@ -18,6 +20,7 @@ export const meta = () => [
 
 const STAGE_LABELS: Record<string, string> = {
     extracting: "Reading your resume...",
+    checking: "Checking ATS compatibility...",
     analyzing: "Analyzing with AI...",
     scoring: "Scoring...",
 };
@@ -29,6 +32,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
     const { resume, analysis } = found;
     const feedback = analysis.status === "done" ? FeedbackSchema.safeParse(analysis.llmFeedback) : null;
+    const report = analysis.status === "done" ? atsReportSchema.safeParse(analysis.atsReport) : null;
 
     return {
         id: resume.id,
@@ -38,6 +42,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
         stage: analysis.stage,
         error: analysis.errorMessage,
         feedback: feedback?.success ? feedback.data : null,
+        report: report?.success ? report.data : null,
+        score: analysis.finalScore,
     };
 }
 
@@ -62,7 +68,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 }
 
 export default function Resume({ loaderData }: Route.ComponentProps) {
-    const { id, title, hasThumbnail, status, stage, error, feedback } = loaderData;
+    const { id, title, hasThumbnail, status, stage, error, feedback, report, score } = loaderData;
     const revalidator = useRevalidator();
     const inFlight = status === "queued" || status === "processing";
 
@@ -106,8 +112,9 @@ export default function Resume({ loaderData }: Route.ComponentProps) {
                     <h2 className="text-4xl !text-black font-bold">Resume Review</h2>
                     {status === "done" && feedback ? (
                         <div className="flex flex-col gap-8 animate-in fade-in duration-1000">
-                            <Summary feedback={feedback} />
-                            <ATS score={feedback.ATS.score} suggestions={feedback.ATS.tips} />
+                            <Summary feedback={feedback} overallScore={score ?? feedback.overallScore} />
+                            {report && <AtsReport report={report} />}
+                            <ATS suggestions={feedback.ATS.tips} />
                             <Details feedback={feedback} />
                         </div>
                     ) : status === "failed" || status === "done" ? (
