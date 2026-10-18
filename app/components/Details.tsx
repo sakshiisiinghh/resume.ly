@@ -98,7 +98,7 @@ const CategoryContent = ({
                             />
                             <p className="text-xl font-semibold">{tip.tip}</p>
                         </div>
-                        <p>{tip.explanation}</p>
+                        {tip.explanation && <p>{tip.explanation}</p>}
                     </div>
                 ))}
             </div>

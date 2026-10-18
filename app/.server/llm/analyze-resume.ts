@@ -18,10 +18,16 @@ export interface ResumeAnalysis {
     latencyMs: number;
 }
 
+export function requestFor(input: ResumeAnalysisInput) {
+    return {
+        instructions: buildInstructions(input.promptVersion, input),
+        user: buildResumeMessage(input.resumeText.slice(0, MAX_RESUME_CHARS)),
+    };
+}
+
 // Shared by the worker and the evals so that what we measure is what ships.
 export async function analyzeResume(llm: LLMProvider, input: ResumeAnalysisInput): Promise<ResumeAnalysis> {
-    const instructions = buildInstructions(input.promptVersion, input);
-    const user = buildResumeMessage(input.resumeText.slice(0, MAX_RESUME_CHARS));
+    const { instructions, user } = requestFor(input);
     let tokensIn = 0;
     let tokensOut = 0;
 

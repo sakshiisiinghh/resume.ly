@@ -1,11 +1,11 @@
 import { Worker } from "bullmq";
 import { pool } from "~/.server/db";
 import { env } from "~/.server/env";
-import { isFinalFailure } from "~/.server/jobs/errors";
+import { detailOf, isFinalFailure } from "~/.server/jobs/errors";
 import { recordFailure, processAnalysis } from "~/.server/jobs/process-analysis";
 import { reapStaleAnalyses } from "~/.server/jobs/reaper";
 import { createLLMProvider } from "~/.server/llm";
-import { enqueueAnalysis, getQueue, MAX_ATTEMPTS, QUEUE_NAME, type AnalysisJob } from "~/.server/queue";
+import { backoffDelay, enqueueAnalysis, getQueue, limiterFor, MAX_ATTEMPTS, QUEUE_NAME, type AnalysisJob } from "~/.server/queue";
 import { createRedis, getRedis } from "~/.server/redis";
 import { getStorage } from "~/.server/storage";
 
@@ -22,14 +22,19 @@ const worker = new Worker<AnalysisJob>(
         }
         await processAnalysis(job.data.analysisId, { storage, llm });
     },
-    { connection: createRedis(), concurrency: env().WORKER_CONCURRENCY }
+    {
+        connection: createRedis(),
+        concurrency: env().WORKER_CONCURRENCY,
+        limiter: limiterFor(env().LLM_REQUESTS_PER_MINUTE),
+        settings: { backoffStrategy: (attemptsMade, _type, err) => backoffDelay(attemptsMade, err) },
+    }
 );
 
 worker.on("failed", async (job, err) => {
     if (!job || job.name !== "analyze") return;
 
     const final = isFinalFailure(err, job.attemptsMade, job.opts.attempts ?? MAX_ATTEMPTS);
-    console.error(`analysis ${job.data.analysisId} ${final ? "failed" : "will retry"}: ${err.message}`);
+    console.error(`analysis ${job.data.analysisId} ${final ? "failed" : "will retry"}: ${err.message}`, detailOf(err) ?? "");
     await recordFailure(job.data.analysisId, err, { final }).catch((e) => console.error("could not record failure", e));
 });
 

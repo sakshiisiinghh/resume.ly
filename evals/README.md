@@ -7,15 +7,32 @@ Numbers instead of claims. This folder holds a labeled dataset, the scripts that
 | What | Measured? |
 |---|---|
 | PDF reading, ATS checks, keyword matching, ranking without the AI, determinism | **Yes.** See [the latest report](reports/). |
-| AI score consistency, ranking by the AI, latency, tokens, prompt v1 vs v2, median of three | **Not yet.** The scripts are built and tested against a fake model, but a real run needs a Gemini key. Until someone runs it, there are no such numbers anywhere in this repo. |
+| AI score consistency, ranking by the AI, latency, tokens, prompt v1 vs v2, median of three | **Yes, on one model: `gemini-3.1-flash-lite`** (60 calls, 2026-10-18). Results below. Not yet on the default model `gemini-3.8-flash`, whose free tier allows only 20 requests a day. |
+| An AI baseline for CI | **No.** It's recorded per model, and which model to ship is still open. |
 
-To measure the AI side:
+## AI results
 
-```bash
-# put GEMINI_API_KEY in .env first
-npm run eval:llm -- --prompts v1,v2            # about 60 calls: 6 pairs x 5 runs x 2 prompts
-npm run eval:llm -- --write-baseline           # record the production prompt's numbers
-```
+Measured on `gemini-3.1-flash-lite`, 6 pairs x 5 repeats x 2 prompts, all 60 runs valid. Full numbers are in the report; the findings are:
+
+- **Repeats gave identical scores.** The standard deviation is 0.00 for every score and both prompts, and each pair's five runs matched down to the exact output token count. For identical input this model is deterministic at temperature 0. It could also be provider-side caching; the effect on this test is the same.
+- **So there was no noise to reduce.** A scoring rubric (v2) or a median of three runs can't improve consistency that is already perfect, and the median would triple the cost. This measures sampling noise only. How much the score moves when the *input* changes slightly (a re-exported PDF, different line wrapping) is **not measured**.
+- **Ranking was right every time.** Strong beat average beat weak in 150 of 150 comparisons for both prompts.
+- **The prompts differ in level, not noise.** v2 scored strong resumes a little lower (88 vs 92) and average ones much lower (55 and 68 vs 65 and 78), so it spreads the tiers further apart. There is no ground truth for what the right score is, so this report can't say which is better. That's a judgment call.
+- **Validity is the real difference.** Valid on the first try: v1 83%, v2 100%. v1 needed the corrective retry on one resume every time, and on another it failed outright.
+- **Speed and size.** Median latency 3.8 s (v1) and 5.7 s (v2), 95th percentile 13 to 16 s. About 1.2K tokens in and 1.0 to 1.1K out per run, including the model's hidden reasoning tokens, which are billed as output. Cost isn't estimated.
+
+### A bug the AI run found
+
+With prompt v1, one resume failed validation on **all 5 runs**: the model left out the `explanation` text of a tip, and the schema required it. Because the model is deterministic, a retry returns the same output, so that resume would have failed for every user. The explanation is a nicety, so it is now optional (an empty one is shown as just the tip). After the fix all 30 v1 runs were valid.
+
+### Running it on a free key
+
+Free Gemini keys are limited per model, and the limits are tight: 5 requests a minute, plus a daily cap (20 requests a day on `gemini-3.8-flash`; the lite model allowed at least 55). The eval copes:
+
+- It paces itself (`--rpm`, default 4) and waits when the provider says to.
+- It stops at once on a daily limit instead of making doomed calls.
+- It saves every valid run in `evals/.cache` (gitignored), keyed by the exact input and model, so run the same command again after the limit resets (midnight Pacific time) and it only does what is missing. `--fresh` ignores the saved runs.
+- If runs span several days the report says so, because a model can change behind the same name.
 
 ## Commands
 
@@ -23,7 +40,7 @@ npm run eval:llm -- --write-baseline           # record the production prompt's 
 |---|---|
 | `npm run eval` | Runs the deterministic evaluation and writes `reports/<date>-deterministic.md`. No key needed. |
 | `npm run eval:baseline` | Records the current deterministic numbers as the baseline. Review the diff before committing it. |
-| `npm run eval:llm` | Runs the AI evaluation. Needs `GEMINI_API_KEY`. Options: `--runs`, `--prompts v1,v2`, `--quick`, `--check`, `--write-baseline`, `--tolerance`. |
+| `npm run eval:llm` | Runs the AI evaluation. Needs `GEMINI_API_KEY`. Options: `--runs`, `--prompts v1,v2`, `--quick`, `--rpm`, `--fresh`, `--check`, `--write-baseline`, `--tolerance`. |
 | `npm test` | Includes a regression test: the deterministic numbers may not get worse than `baseline.json`. |
 
 Add `EVAL_PRICE_IN_PER_MTOK` and `EVAL_PRICE_OUT_PER_MTOK` (USD per million tokens) to include a cost estimate. Without them only tokens are reported, because prices change and aren't guessed.
@@ -85,14 +102,12 @@ Some first-run discrepancies were my labeling mistakes. Each was corrected from 
 
 ## Prompt versions
 
-`v1` is what ships. `v2` is `v1` plus a scoring rubric (what a 40, 70 or 90 means, a definition for each category, and "overall is the mean of the four categories"). It is a candidate, not a change: it ships only if `npm run eval:llm -- --prompts v1,v2` shows it is more consistent without hurting ranking. To switch, change `PROMPT_VERSION` in `constants/index.ts`. Existing analyses keep the version they were created with, and new ones re-analyse because the version is part of the idempotency key.
-
-The report also shows the standard deviation of the "mean of the four categories" and of the final user-facing score, since averaging noisy categories in code may calm the score without a prompt change.
+`v1` is what ships. `v2` is `v1` plus a scoring rubric (what a 40, 70 or 90 means, a definition for each category, and "overall is the mean of the four categories"). On `gemini-3.1-flash-lite` it did not reduce noise, because there was none to reduce (see AI results). It does change the score levels and gave 100% first-try validity vs 83% for v1. Switching is a judgment call about which levels you want, not something the data decides. To switch, change `PROMPT_VERSION` in `constants/index.ts`. Existing analyses keep the version they were created with, and new ones re-analyse because the version is part of the idempotency key.
 
 ## Regression checks
 
 - `npm test` runs the deterministic evaluation and fails if any metric is worse than `baseline.json`. Changing the dataset also fails it until the baseline is re-recorded on purpose.
-- `.github/workflows/eval.yml` runs when `constants/`, `app/.server/llm/`, `app/.server/ats/` or `evals/` change. It always runs the deterministic check. If the repository has a `GEMINI_API_KEY` secret it also runs the AI regression (`--quick`, about 9 calls), which compares against `baseline.llm.json`. That file doesn't exist yet, so the AI check currently only reports.
+- `.github/workflows/eval.yml` runs when `constants/`, `app/.server/llm/`, `app/.server/ats/` or `evals/` change. It always runs the deterministic check. If the repository has a `GEMINI_API_KEY` secret it also runs the AI regression (`--quick`, about 9 calls), which compares against `baseline.llm.json`. That file doesn't exist yet, so the AI check currently only reports. A baseline is tied to the model it was recorded on; a check on a different model is skipped with a notice.
 - Model output is noisy, so the AI check allows a tolerance (default 1.5 points of std-dev). Thresholds come from a recorded baseline, not from guesses.
 
 ## Limitations
@@ -101,4 +116,4 @@ The report also shows the standard deviation of the "mean of the four categories
 - The PDFs come from a simple generator (one font, absolute positions). Word, LaTeX and Canva output is messier, and extraction on it isn't measured.
 - The skills dictionary has 125 entries, so skills outside it are invisible. All five misses in the first report are of this kind.
 - English only.
-- The AI side has no numbers yet (see Status).
+- The AI numbers come from one model and 6 pairs, and only measure repeat-to-repeat noise on identical input.

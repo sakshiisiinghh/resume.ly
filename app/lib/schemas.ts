@@ -8,8 +8,9 @@ const atsTip = z.object({
     tip: z.string().min(1),
 });
 
+// The explanation is a nicety. Some models leave it out, and that shouldn't discard an otherwise valid analysis.
 const detailedTip = atsTip.extend({
-    explanation: z.string().min(1),
+    explanation: z.string().default(""),
 });
 
 const category = z.object({

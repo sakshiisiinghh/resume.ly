@@ -82,23 +82,31 @@ export interface LlmBaseline {
 }
 
 export function toLlmBaseline(summary: PromptSummary, meta: { model: string; datasetVersion: string; recordedAt: string; runsPerPair: number }): LlmBaseline {
+    const { overall, final } = summary.spread;
+    if (!overall || !final) throw new Error("Not enough valid runs to record a baseline");
+
     const { comparisons, agree } = summary.ranking.overall;
     return {
         ...meta,
         promptVersion: summary.prompt,
         validRate: summary.validRate,
-        overallMeanStdev: summary.spread.overall.meanStdev,
-        finalMeanStdev: summary.spread.final.meanStdev,
+        overallMeanStdev: overall.meanStdev,
+        finalMeanStdev: final.meanStdev,
         rankingAgreement: comparisons === 0 ? null : Math.round((agree / comparisons) * 10000) / 10000,
     };
 }
 
 /** Model output is noisy, so the caller picks how much worse than the baseline still passes. */
 export function findLlmRegressions(summary: PromptSummary, baseline: LlmBaseline, { stdevTolerance = 1.5, rateTolerance = 0.05 } = {}): Regression[] {
-    const now = toLlmBaseline(summary, { model: baseline.model, datasetVersion: baseline.datasetVersion, recordedAt: baseline.recordedAt, runsPerPair: baseline.runsPerPair });
     const out: Regression[] = [];
+    if (summary.validRate < baseline.validRate - rateTolerance) out.push({ metric: "valid output rate", baseline: baseline.validRate, current: summary.validRate });
+    if (!summary.spread.overall || !summary.spread.final) {
+        out.push({ metric: "pairs with two or more valid runs", baseline: 1, current: 0 });
+        return out;
+    }
 
-    if (now.validRate < baseline.validRate - rateTolerance) out.push({ metric: "valid output rate", baseline: baseline.validRate, current: now.validRate });
+    const now = toLlmBaseline(summary, { model: baseline.model, datasetVersion: baseline.datasetVersion, recordedAt: baseline.recordedAt, runsPerPair: baseline.runsPerPair });
+
     if (now.overallMeanStdev > baseline.overallMeanStdev + stdevTolerance) out.push({ metric: "overall score std-dev", baseline: baseline.overallMeanStdev, current: now.overallMeanStdev });
     if (now.finalMeanStdev > baseline.finalMeanStdev + stdevTolerance) out.push({ metric: "final score std-dev", baseline: baseline.finalMeanStdev, current: now.finalMeanStdev });
     if (baseline.rankingAgreement !== null && (now.rankingAgreement === null || now.rankingAgreement < baseline.rankingAgreement - rateTolerance)) {

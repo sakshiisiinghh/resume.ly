@@ -89,6 +89,7 @@ describe("findLlmRegressions", () => {
         runs: 30,
         valid: 30,
         validRate: 1,
+        firstTryRate: 1,
         retryRate: 0,
         failures: [],
         spread: { overall: spread, final: { ...spread, meanStdev: 1.5 } } as PromptSummary["spread"],
@@ -125,6 +126,18 @@ describe("findLlmRegressions", () => {
             "ranking agreement",
             "valid output rate",
         ]);
+    });
+
+    it("refuses to record a baseline without enough valid runs", () => {
+        const empty = summary({ spread: { overall: null, final: null } as PromptSummary["spread"] });
+
+        expect(() => toLlmBaseline(empty, { model: "m", datasetVersion: "d", recordedAt: "x", runsPerPair: 5 })).toThrow(/valid runs/);
+    });
+
+    it("reports a regression, instead of crashing, when there are too few valid runs to measure", () => {
+        const empty = summary({ validRate: 0.2, spread: { overall: null, final: null } as PromptSummary["spread"] });
+
+        expect(findLlmRegressions(empty, base).map((r) => r.metric).sort()).toEqual(["pairs with two or more valid runs", "valid output rate"]);
     });
 
     it("lets the caller widen the tolerance", () => {

@@ -64,6 +64,22 @@ describe("parseFeedback", () => {
         expect(parseFeedback(JSON.stringify(low)).ok).toBe(true);
     });
 
+    it("accepts a tip with no explanation and fills in an empty one", () => {
+        const withoutExplanation = { ...validFeedback, structure: { score: 70, tips: [{ type: "improve", tip: "Add a summary" }] } };
+
+        const result = parseFeedback(JSON.stringify(withoutExplanation));
+
+        expect(result.ok).toBe(true);
+        if (result.ok) expect(result.feedback.structure.tips[0]).toEqual({ type: "improve", tip: "Add a summary", explanation: "" });
+    });
+
+    it("still requires a tip title and a valid score", () => {
+        const noTitle = { ...validFeedback, structure: { score: 70, tips: [{ type: "improve", explanation: "x" }] } };
+
+        expect(parseFeedback(JSON.stringify(noTitle)).ok).toBe(false);
+        expect(parseFeedback(JSON.stringify({ ...validFeedback, structure: { score: 170, tips: validFeedback.structure.tips } })).ok).toBe(false);
+    });
+
     it("rejects unknown tip types", () => {
         const bad = { ...validFeedback, ATS: { score: 50, tips: [{ type: "meh", tip: "x" }] } };
         expect(parseFeedback(JSON.stringify(bad)).ok).toBe(false);

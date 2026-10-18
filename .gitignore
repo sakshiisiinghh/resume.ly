@@ -11,3 +11,4 @@
 
 # raw eval output (the markdown reports are committed)
 evals/reports/*.json
+evals/.cache/

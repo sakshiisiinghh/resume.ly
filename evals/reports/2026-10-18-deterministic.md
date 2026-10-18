@@ -5,7 +5,7 @@ Measures the parts of Resume.ly that don't call an AI model: PDF reading, the AT
 | | |
 |---|---|
 | Date | 2026-10-18 |
-| Commit | `1aba629 + uncommitted changes` |
+| Commit | `88550bc + uncommitted changes` |
 | Dataset version | `bffeb81c8c3c` |
 | Resumes | 25 (2 deliberately unreadable) |
 | Resume and job pairs | 37 (35 readable) |
@@ -112,7 +112,7 @@ ATS readiness (parseability and keywords only) for strong, average and weak resu
 
 | Pairs re-run from fresh PDF bytes | Identical reports | Read and check p50 | Read and check p95 |
 | --- | --- | --- | --- |
-| 35 | 35 | 1.9 ms | 4.2 ms |
+| 35 | 35 | 2.1 ms | 8.2 ms |
 
 ## Known limitations
 

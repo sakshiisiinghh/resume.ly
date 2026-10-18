@@ -1,6 +1,6 @@
 import { SKILLS } from "~/.server/ats/skills";
 import type { DeterministicResults, Scores } from "./deterministic";
-import { METRICS, type MetricName, type PromptSummary } from "./llm";
+import { METRICS, MIN_VALID_RATE, type MetricName, type PromptSummary, type Spread } from "./llm";
 
 export interface ReportMeta {
     date: string;
@@ -129,6 +129,8 @@ const fixed = (n: number, places = 2) => n.toFixed(places);
 
 export interface LlmReportMeta extends ReportMeta {
     model: string;
+    /** The days the runs were made on. More than one means the run was finished over several sessions. */
+    runDates: string[];
     runsPerPair: number;
     pairs: number;
     productionPrompt: string;
@@ -157,18 +159,30 @@ export function renderLlmReport(summaries: PromptSummary[], meta: LlmReportMeta)
     const summaryRows: (string | number)[][] = [
         ["Runs", ...summaries.map((s) => s.runs)],
         ["Valid output", ...summaries.map((s) => pct(s.validRate))],
-        ["Needed a retry", ...summaries.map((s) => pct(s.retryRate))],
+        ["Valid on the first try", ...summaries.map((s) => pct(s.firstTryRate))],
+        ["Valid runs that needed the retry", ...summaries.map((s) => pct(s.retryRate))],
         ["Latency p50 / p95", ...summaries.map((s) => `${s.latencyMs.p50} / ${s.latencyMs.p95} ms`)],
         ["Tokens in / out per run", ...summaries.map((s) => `${s.tokens.meanIn} / ${s.tokens.meanOut}`)],
         ["Estimated cost", ...summaries.map((s) => (s.costUsd === null ? "not estimated" : `$${s.costUsd}`))],
     ];
 
-    const spreadRows = METRICS.map((m) => [LABELS[m], ...summaries.map((s) => `${fixed(s.spread[m].meanStdev)} (max ${fixed(s.spread[m].maxStdev)}, range ${fixed(s.spread[m].meanRange)})`)]);
+    const show = (spread: Spread | null) => (spread ? `${fixed(spread.meanStdev)} (max ${fixed(spread.maxStdev)}, range ${fixed(spread.meanRange)})` : "n/a (needs 2+ valid runs per pair)");
+    const spreadRows = METRICS.map((m) => [LABELS[m], ...summaries.map((s) => show(s.spread[m]))]);
+    const incomplete = summaries.filter((s) => s.validRate < MIN_VALID_RATE);
+    const banner = incomplete.length
+        ? `> **Incomplete run.** ${incomplete.map((s) => `${s.prompt}: ${s.valid} of ${s.runs} calls gave a valid result`).join("; ")}. The numbers below use only the valid runs, so they are not reliable and must not be recorded as a baseline.\n\n`
+        : "";
 
-    const delta = second
+    const allIdentical = summaries.every((s) => METRICS.every((m) => s.spread[m] === null || s.spread[m]!.maxStdev === 0)) && summaries.some((s) => s.spread.overall !== null);
+    const identicalNote = allIdentical
+        ? "> **Every repeat gave exactly the same scores.** For identical input this model is deterministic at temperature 0, so this test shows no noise to reduce, and a median of several runs would only add cost. Differences between prompts here are differences in score *level*, which this report can't judge as better or worse.\n\n"
+        : "";
+
+    const comparable = second && first.spread.overall && first.spread.final && second.spread.overall && second.spread.final;
+    const delta = comparable
         ? `\n### Change from ${first.prompt} to ${second.prompt}\n\n${table(
               ["Metric", "Std-dev change"],
-              (["overall", "final"] as const).map((m) => [LABELS[m], `${fixed(second.spread[m].meanStdev - first.spread[m].meanStdev)} points`])
+              (["overall", "final"] as const).map((m) => [LABELS[m], `${fixed(second.spread[m]!.meanStdev - first.spread[m]!.meanStdev)} points`])
           )}\n\nA negative change means ${second.prompt} is more consistent. With ${meta.runsPerPair} runs on ${meta.pairs} pairs, differences of a point or less may be noise.\n`
         : "";
 
@@ -188,13 +202,14 @@ Measures how consistent and sensible the AI's scores are. Every number here come
 | Prompt versions | ${head.join(", ")} (production: ${meta.productionPrompt}) |
 | Dataset version | \`${meta.datasetVersion}\` |
 | Pairs x repeats | ${meta.pairs} x ${meta.runsPerPair} |
+| Runs made on | ${meta.runDates.join(", ")} |
 
-## Read this first
+${banner}## Read this first
 
 - Resumes are synthetic, and there are only ${meta.pairs} pairs, so every number is an estimate with a wide margin.
 - Standard deviation is measured **per pair across repeats of the identical input**, then averaged. It shows how much the score moves when nothing changed.
 - Prompt changes were not tuned on this set before these runs.
-
+${meta.runDates.length > 1 ? "- The runs span several days, and the model can change behind the same name between days, so part of the spread may be drift rather than noise.\n" : ""}
 ## Summary
 
 ${table(["", ...head], summaryRows)}
@@ -202,7 +217,7 @@ ${table(["", ...head], summaryRows)}
 ${summaries.some((s) => s.failures.length) ? `Failures:\n\n${list(summaries.flatMap((s) => s.failures.map((f) => `${s.prompt}: ${f.message} (${f.count}x)`)))}\n` : ""}
 ## Score consistency (standard deviation in points)
 
-${table(["Score", ...head], spreadRows)}
+${identicalNote}${table(["Score", ...head], spreadRows)}
 ${delta}
 ### Would a median of three runs help?
 

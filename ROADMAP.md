@@ -315,23 +315,23 @@ Show matched and missing terms with evidence from the resume text. Treat checks 
 ### Evaluation scripts
 
 - [x] Precision/recall for deterministic checks and keyword extraction against labels. First run found 5 engine problems; all fixed and tested.
-- [ ] Repeated LLM analyses (e.g. N=5) on a fixed subset → per-category score standard deviation. **Built and tested; not yet run (needs `GEMINI_API_KEY`).**
+- [x] Repeated LLM analyses (N=5) on a fixed subset → per-category score standard deviation. Measured on `gemini-3.1-flash-lite`: 0.00 everywhere (identical outputs).
 - [x] Ranking sanity without the AI: 18 of 18 comparisons in the right order.
-- [ ] Ranking sanity for the AI's scores. **Built and tested; not yet run.**
+- [x] Ranking sanity for the AI's scores: 150 of 150 comparisons in the right order, for both prompts.
 - [x] Record model, prompt version, dataset version, commit and run date in each report (`evals/reports/`).
-- [x] Track latency and tokens; cost is estimated only when prices are supplied. (Reported by the AI run, which hasn't happened yet.)
+- [x] Track latency and tokens; cost is estimated only when prices are supplied.
 
 ### Improving consistency (after the baseline)
 
 - [x] Temperature 0 (already used).
-- [ ] A scoring rubric with anchors, then aggregate. **Written as prompt `v2`; not adopted until measured against `v1`.**
-- [ ] Optionally take the median of 3 runs; measure the cost vs variance trade-off before adopting it. **The estimate is built into the AI report; not yet run.**
+- [x] A scoring rubric with anchors, then aggregate. Written as prompt `v2` and measured: no variance benefit (nothing to reduce on this model), but different score levels and better first-try validity. Not adopted; that is a judgment call.
+- [x] Optionally take the median of 3 runs; measure the cost vs variance trade-off before adopting it. Measured: no benefit, since repeats are identical. Not adopted.
 
 ### Regression checks
 
 - [x] Fast unit/eval checks in CI (`npm test` fails if the deterministic numbers get worse).
 - [x] A small prompt-regression set runs when `llm/` or `ats/` changes (`.github/workflows/eval.yml`; the AI part needs the `GEMINI_API_KEY` secret).
-- [x] Set thresholds only after a baseline exists: the deterministic baseline is recorded; the AI baseline will be recorded with the first real run.
+- [x] Set thresholds only after a baseline exists: the deterministic baseline is recorded. The AI baseline is left until the shipping model is chosen, since it is tied to a model.
 
 **Deliverable:** a reproducible report with actual results and known limitations.
 
