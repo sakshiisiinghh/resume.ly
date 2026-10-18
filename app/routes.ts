@@ -9,4 +9,6 @@ export default [
     route("resume/:id", "routes/resume.tsx"),
     route("files/:id/:kind", "routes/files.ts"),
     route("api/resumes/:id/events", "routes/api.resume-events.ts"),
+    route("healthz", "routes/healthz.ts"),
+    route("readyz", "routes/readyz.ts"),
 ] satisfies RouteConfig;

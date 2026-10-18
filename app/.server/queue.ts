@@ -12,9 +12,11 @@ const RETRY_MARGIN_MS = 1000;
 
 export interface AnalysisJob {
     analysisId: string;
+    /** The web request that started this job, so one id can be followed through the logs. */
+    requestId?: string;
 }
 
-export type Enqueue = (job: { analysisId: string; idempotencyKey: string }) => Promise<void>;
+export type Enqueue = (job: { analysisId: string; idempotencyKey: string; requestId?: string }) => Promise<void>;
 
 let queue: Queue | undefined;
 
@@ -32,10 +34,10 @@ export function backoffDelay(attemptsMade: number, err?: Error): number {
 export const limiterFor = (requestsPerMinute?: number) => (requestsPerMinute ? { max: requestsPerMinute, duration: 60_000 } : undefined);
 
 // jobId is the idempotency key, so BullMQ drops a duplicate that is already queued or running.
-export const enqueueAnalysis: Enqueue = async ({ analysisId, idempotencyKey }) => {
+export const enqueueAnalysis: Enqueue = async ({ analysisId, idempotencyKey, requestId }) => {
     const job = getQueue().add(
         "analyze",
-        { analysisId } satisfies AnalysisJob,
+        { analysisId, requestId } satisfies AnalysisJob,
         {
             jobId: idempotencyKey,
             attempts: MAX_ATTEMPTS,

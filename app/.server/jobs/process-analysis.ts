@@ -8,6 +8,7 @@ import type { LLMProvider } from "~/.server/llm";
 import { analyzeResume } from "~/.server/llm/analyze-resume";
 import { isPromptVersion } from "~/.server/llm/prompts";
 import { publishProgress } from "~/.server/redis";
+import { logger, type Logger } from "~/.server/logger";
 import { readPdf } from "~/.server/pdf";
 import type { StorageDriver } from "~/.server/storage";
 
@@ -15,11 +16,12 @@ export interface ProcessDeps {
     storage: StorageDriver;
     llm: LLMProvider;
     publish?: typeof publishProgress;
+    log?: Logger;
 }
 
 const HEARTBEAT_MS = 30_000;
 
-export async function processAnalysis(analysisId: string, { storage, llm, publish = publishProgress }: ProcessDeps) {
+export async function processAnalysis(analysisId: string, { storage, llm, publish = publishProgress, log = logger }: ProcessDeps) {
     const [row] = await db
         .select({ analysis: analyses, resume: resumes })
         .from(analyses)
@@ -35,6 +37,9 @@ export async function processAnalysis(analysisId: string, { storage, llm, publis
         await publish(analysisId, { status: "processing", stage });
     };
 
+    const started = Date.now();
+    log.info({ attempt: analysis.attempts + 1, queueWaitMs: started - analysis.queuedAt.getTime() }, "analysis started");
+
     await move("extracting", { startedAt: new Date(), attempts: analysis.attempts + 1, errorCode: null, errorMessage: null });
     const heartbeat = setInterval(() => {
         db.update(analyses).set({ heartbeatAt: new Date() }).where(eq(analyses.id, analysisId)).catch(() => {});
@@ -45,6 +50,7 @@ export async function processAnalysis(analysisId: string, { storage, llm, publis
         if (!bytes) throw new PermanentError("The uploaded file could not be found.", "file_missing");
 
         const pdf = await readPdf(bytes);
+        const readMs = Date.now() - started;
 
         let thumbKey: string | null = null;
         if (pdf.thumbnail) {
@@ -54,14 +60,16 @@ export async function processAnalysis(analysisId: string, { storage, llm, publis
         await db.update(resumes).set({ thumbKey, pageCount: pdf.doc.pageCount }).where(eq(resumes.id, resume.id));
 
         await move("checking");
+        const checksStarted = Date.now();
         const report = buildAtsReport(pdf.doc, resume.jobDescription);
+        const checksMs = Date.now() - checksStarted;
         await db.update(analyses).set({ atsReport: report }).where(eq(analyses.id, analysisId));
 
         await move("analyzing");
         if (!isPromptVersion(analysis.promptVersion)) {
             throw new PermanentError(`Unknown prompt version ${analysis.promptVersion}`, "unknown_prompt_version");
         }
-        const { result, tokensIn, tokensOut } = await analyzeResume(llm, {
+        const { result, tokensIn, tokensOut, latencyMs: llmMs } = await analyzeResume(llm, {
             resumeText: pdf.doc.text,
             jobTitle: resume.jobTitle,
             jobDescription: resume.jobDescription,
@@ -85,6 +93,10 @@ export async function processAnalysis(analysisId: string, { storage, llm, publis
             })
             .where(eq(analyses.id, analysisId));
         await publish(analysisId, { status: "done", stage: null });
+        log.info(
+            { totalMs: Date.now() - started, readMs, checksMs, llmMs, pages: pdf.doc.pageCount, chars: pdf.doc.text.length, finalScore: scoring.final, tokensIn, tokensOut },
+            "analysis finished"
+        );
     } finally {
         clearInterval(heartbeat);
     }

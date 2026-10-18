@@ -1,3 +1,4 @@
+import { createCanvas, loadImage } from "@napi-rs/canvas";
 import { describe, expect, it } from "vitest";
 import { PermanentError } from "~/.server/jobs/errors";
 import { readPdf } from "~/.server/pdf";
@@ -53,6 +54,27 @@ describe("readPdf", () => {
         const { thumbnail } = await readPdf(buildPdf([{ items: columnItems(cleanResumeLines) }]));
 
         expect(thumbnail?.subarray(8, 12).toString()).toBe("WEBP");
+    });
+
+    it("draws the text in the thumbnail, even when the PDF doesn't embed its font", async () => {
+        const { thumbnail } = await readPdf(buildPdf([{ items: columnItems(cleanResumeLines) }]));
+
+        const image = await loadImage(thumbnail!);
+        const canvas = createCanvas(image.width, image.height);
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0);
+        const pixels = context.getImageData(0, 0, image.width, image.height).data;
+
+        let dark = 0;
+        for (let i = 0; i < pixels.length; i += 4) if (pixels[i] < 128) dark++;
+        expect(dark).toBeGreaterThan(2000);
+    });
+
+    it("gives up on a PDF that takes too long to read, as a permanent failure", async () => {
+        const error = await readPdf(buildPdf([{ items: columnItems(cleanResumeLines) }]), { timeoutMs: 1 }).catch((e) => e);
+
+        expect(error).toBeInstanceOf(PermanentError);
+        expect(error.code).toBe("pdf_timeout");
     });
 
     it("refuses a scanned, image-only PDF instead of scoring empty text", async () => {

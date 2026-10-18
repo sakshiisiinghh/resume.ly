@@ -137,6 +137,26 @@ describe.skipIf(!hasTestDb)("submitResume", () => {
         expect(enqueue).toHaveBeenCalledOnce();
     });
 
+    it("passes the request id on, so the job can be traced back to the request", async () => {
+        const user = await createUser();
+
+        const { resumeId } = await submitResume({ ...base, userId: user.id }, { ...deps, requestId: "req-abc-123" });
+
+        const { analysis } = (await getResume(user.id, resumeId))!;
+        expect(enqueue).toHaveBeenCalledWith({ analysisId: analysis.id, idempotencyKey: analysis.idempotencyKey, requestId: "req-abc-123" });
+    });
+
+    it("passes the request id on when a failed analysis is retried", async () => {
+        const user = await createUser();
+        await submitResume({ ...base, userId: user.id }, deps);
+        await db.update(analyses).set({ status: "failed", errorCode: "llm_unavailable" });
+        enqueue.mockClear();
+
+        await submitResume({ ...base, userId: user.id }, { ...deps, requestId: "req-retry-1" });
+
+        expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ requestId: "req-retry-1" }));
+    });
+
     it("marks the analysis failed when the queue is unreachable", async () => {
         const user = await createUser();
         enqueue.mockRejectedValue(new Error("redis down"));

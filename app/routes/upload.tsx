@@ -5,7 +5,9 @@ import FileUploader from "~/components/FileUploader";
 import Navbar from "~/components/Navbar";
 import { assertSameOrigin, requireUser } from "~/.server/auth";
 import { enqueueAnalysis } from "~/.server/queue";
+import { RULES, checkRateLimits, tooManyRequests } from "~/.server/rate-limit";
 import { MAX_PDF_BYTES, submitResume, validatePdf } from "~/.server/resumes";
+import { logger } from "~/.server/logger";
 import { getStorage } from "~/.server/storage";
 import type { Route } from "./+types/upload";
 
@@ -25,9 +27,11 @@ export async function loader({ request }: Route.LoaderArgs) {
     return null;
 }
 
-export async function action({ request }: Route.ActionArgs) {
+export async function action({ request, context }: Route.ActionArgs) {
     assertSameOrigin(request);
     const user = await requireUser(request);
+    const limited = await checkRateLimits([{ rule: RULES.analysis, subject: user.id }]);
+    if (limited) return tooManyRequests(limited);
 
     // Reject oversized bodies before buffering them.
     if (Number(request.headers.get("Content-Length")) > MAX_PDF_BYTES + 100_000) {
@@ -51,8 +55,9 @@ export async function action({ request }: Route.ActionArgs) {
 
     const { resumeId } = await submitResume(
         { userId: user.id, fileName: file.name, bytes, ...fields.data },
-        { storage: getStorage(), enqueue: enqueueAnalysis }
+        { storage: getStorage(), enqueue: enqueueAnalysis, requestId: context.requestId }
     );
+    logger.info({ requestId: context.requestId, userId: user.id, resumeId, bytes: bytes.length }, "resume submitted");
     return redirect(`/resume/${resumeId}`);
 }
 

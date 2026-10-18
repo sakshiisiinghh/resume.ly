@@ -28,8 +28,29 @@ jobs:
           --health-timeout 3s
           --health-retries 10
 
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+      s3:
+        image: adobe/s3mock
+        env:
+          initialBuckets: resumely-test
+        ports:
+          - 9090:9090
+
     env:
       TEST_DATABASE_URL: postgres://resumely:resumely@localhost:5432/resumely_test
+      TEST_REDIS_URL: redis://localhost:6379
+      TEST_S3_ENDPOINT: http://localhost:9090
+      TEST_S3_ACCESS_KEY_ID: test
+      TEST_S3_SECRET_ACCESS_KEY: test
 
     steps:
       - uses: actions/checkout@v4
@@ -44,9 +65,17 @@ jobs:
       - run: npm test
       - run: npm run build
 
+      # Starts the production build and checks the headers and CSP a real browser depends on.
+      - run: npm run smoke
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+          REDIS_URL: ${{ env.TEST_REDIS_URL }}
+          SESSION_SECRET: ci-smoke-test-secret-long-enough-to-pass
+
   docker:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: docker build --target app -t resumely-app .
       - run: docker build --target worker -t resumely-worker .
+      - run: docker build --target combined -t resumely-combined .

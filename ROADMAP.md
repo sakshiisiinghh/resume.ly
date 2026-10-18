@@ -345,14 +345,14 @@ Show matched and missing terms with evidence from the resume text. Treat checks 
 
 **Why:** a deployed, documented project that another engineer can run and inspect beats a feature-rich one that only works on your laptop.
 
-- [ ] Deploy app, worker, database, Redis and file storage on a setup you can maintain (e.g. Railway/Render/Fly + managed Postgres + Upstash + R2).
-- [ ] Rate limits (Redis sliding window) for uploads, analyses and login attempts.
-- [ ] Security headers (CSP, `X-Content-Type-Options`), input validation, and file-processing limits and timeouts (PDF parsing only in the worker, with a timeout).
-- [ ] Structured logs (pino) with a request/job ID carried from upload through worker completion.
-- [ ] `/healthz` (liveness) and `/readyz` (DB + Redis reachable); basic error monitoring (e.g. Sentry).
-- [ ] Modest load test (k6): measure upload response p95, job duration, failure rate and queue drain at different worker concurrencies.
-- [ ] A real README: problem, screenshots/demo GIF, architecture diagram, data flow, setup, env vars, tests, evaluation results, trade-offs.
-- [ ] Short ADRs for meaningful choices: queue, scoring, storage, SSE vs WebSockets, auth.
+- [ ] (Not done: needs your own hosting accounts. Images, health checks and [docs/deploy.md](docs/deploy.md) are ready.) Deploy app, worker, database, Redis and file storage on a setup you can maintain (e.g. Railway/Render/Fly + managed Postgres + Upstash + R2).
+- [x] Rate limits (Redis sliding window) for uploads, analyses and login attempts.
+- [x] Security headers (CSP, `X-Content-Type-Options`), input validation, and file-processing limits and timeouts (PDF parsing only in the worker, with a timeout).
+- [x] Structured logs (pino) with a request/job ID carried from upload through worker completion.
+- [x] `/healthz` (liveness) and `/readyz` (DB + Redis reachable); basic error monitoring (e.g. Sentry).
+- [x] Modest load test (a TypeScript script instead of k6, see [docs/load-test.md](docs/load-test.md)): measure upload response p95, job duration, failure rate and queue drain at different worker concurrencies.
+- [x] A real README: problem, screenshots/demo GIF, architecture diagram, data flow, setup, env vars, tests, evaluation results, trade-offs.
+- [x] Short ADRs ([docs/adr](docs/adr/README.md)) for meaningful choices: queue, scoring, storage, SSE vs WebSockets, auth.
 - [ ] A working deployed demo link in the README and resume, if public demo access is safe (seeded demo account + rate limits).
 
 **Deliverable:** a deployed project that another engineer can run, inspect and evaluate.

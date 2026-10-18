@@ -5,6 +5,7 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useRouteLoaderData,
 } from "react-router";
 
 import type { Route } from "./+types/root";
@@ -23,7 +24,13 @@ export const links: Route.LinksFunction = () => [
   },
 ];
 
+export function loader({ context }: Route.LoaderArgs) {
+  return { nonce: context.nonce };
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
+  const nonce = useRouteLoaderData<typeof loader>("root")?.nonce;
+
   return (
     <html lang="en">
       <head>
@@ -34,8 +41,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body>
       {children}
-        <ScrollRestoration />
-        <Scripts />
+        <ScrollRestoration nonce={nonce} />
+        <Scripts nonce={nonce} />
       </body>
     </html>
   );

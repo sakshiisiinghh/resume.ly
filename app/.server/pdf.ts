@@ -1,10 +1,18 @@
+import { createRequire } from "node:module";
+import path from "node:path";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { buildDocument, type ExtractedDoc, type RawPage } from "~/.server/ats/document";
 import { PermanentError } from "~/.server/jobs/errors";
+import { withTimeout } from "~/.server/timeout";
 
 export const MIN_RESUME_TEXT_LENGTH = 200;
 const MAX_PAGES = 10;
+const PARSE_TIMEOUT_MS = 30_000;
 const THUMBNAIL_WIDTH = 800;
+
+// PDFs that use the standard fonts without embedding them (common in generated PDFs) draw as blank
+// unless pdf.js can load its bundled copies.
+const STANDARD_FONTS = `${path.join(path.dirname(createRequire(import.meta.url).resolve("pdfjs-dist/package.json")), "standard_fonts")}/`;
 
 interface CanvasFactory {
     create(width: number, height: number): {
@@ -25,10 +33,19 @@ export interface ParsedPdf {
     thumbnail: Buffer | null;
 }
 
-export async function readPdf(bytes: Buffer, { thumbnail = true } = {}): Promise<ParsedPdf> {
+export async function readPdf(bytes: Buffer, { thumbnail = true, timeoutMs = PARSE_TIMEOUT_MS } = {}): Promise<ParsedPdf> {
+    try {
+        return await withTimeout(parsePdf(bytes, thumbnail), timeoutMs, "reading the PDF");
+    } catch (err) {
+        if (/timed out/.test(String(err))) throw new PermanentError("This PDF took too long to read.", "pdf_timeout");
+        throw err;
+    }
+}
+
+async function parsePdf(bytes: Buffer, thumbnail: boolean): Promise<ParsedPdf> {
     let pdf: pdfjs.PDFDocumentProxy;
     try {
-        pdf = await pdfjs.getDocument({ data: new Uint8Array(bytes), verbosity: pdfjs.VerbosityLevel.ERRORS }).promise;
+        pdf = await pdfjs.getDocument({ data: new Uint8Array(bytes), standardFontDataUrl: STANDARD_FONTS, verbosity: pdfjs.VerbosityLevel.ERRORS }).promise;
     } catch {
         throw new PermanentError("This PDF is damaged, encrypted or can't be read.", "invalid_pdf");
     }

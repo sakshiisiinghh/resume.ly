@@ -7,6 +7,7 @@ import Details from "~/components/Details";
 import Summary from "~/components/Summary";
 import { assertSameOrigin, requireUser } from "~/.server/auth";
 import { enqueueAnalysis } from "~/.server/queue";
+import { RULES, checkRateLimits, tooManyRequests } from "~/.server/rate-limit";
 import { deleteResume, getResume, retryAnalysis } from "~/.server/resumes";
 import { getStorage } from "~/.server/storage";
 import { atsReportSchema } from "~/lib/ats";
@@ -47,7 +48,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     };
 }
 
-export async function action({ request, params }: Route.ActionArgs) {
+export async function action({ request, params, context }: Route.ActionArgs) {
     assertSameOrigin(request);
     const user = await requireUser(request);
     const intent = (await request.formData()).get("intent");
@@ -60,14 +61,18 @@ export async function action({ request, params }: Route.ActionArgs) {
     if (intent === "retry") {
         const found = await getResume(user.id, params.id);
         if (!found) throw new Response("Not found", { status: 404 });
-        await retryAnalysis(found.analysis.id, enqueueAnalysis);
+
+        const limited = await checkRateLimits([{ rule: RULES.analysis, subject: user.id }]);
+        if (limited) return tooManyRequests(limited);
+
+        await retryAnalysis(found.analysis.id, enqueueAnalysis, undefined, context.requestId);
         return null;
     }
 
     return data({ error: "Unknown action" }, { status: 400 });
 }
 
-export default function Resume({ loaderData }: Route.ComponentProps) {
+export default function Resume({ loaderData, actionData }: Route.ComponentProps) {
     const { id, title, hasThumbnail, status, stage, error, feedback, report, score } = loaderData;
     const revalidator = useRevalidator();
     const inFlight = status === "queued" || status === "processing";
@@ -110,6 +115,9 @@ export default function Resume({ loaderData }: Route.ComponentProps) {
                 </section>
                 <section className="feedback-section">
                     <h2 className="text-4xl !text-black font-bold">Resume Review</h2>
+                    {actionData && "error" in actionData && actionData.error && (
+                        <p role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">{actionData.error}</p>
+                    )}
                     {status === "done" && feedback ? (
                         <div className="flex flex-col gap-8 animate-in fade-in duration-1000">
                             <Summary feedback={feedback} overallScore={score ?? feedback.overallScore} />

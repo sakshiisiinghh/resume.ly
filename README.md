@@ -17,7 +17,9 @@
 
 ## 🚀 Live Application
 
-🔗 **Deployed on Vercel:** [View Live Demo](https://resume-ly-neon.vercel.app/auth?next=/)
+🔗 **Earlier version:** [resume-ly-neon.vercel.app](https://resume-ly-neon.vercel.app/auth?next=/) is the original deployment and does not run the current code (the worker, queue and database need a host that runs long-lived processes).
+
+The current version runs locally with one command (see [Getting Started](#️-getting-started)) and is packaged for deployment: see [docs/deploy.md](docs/deploy.md).
 
 ---
 
@@ -44,6 +46,8 @@ Built with **React Router v7 on Node**, uploads are processed asynchronously by 
 * **🔐 Real Auth:** Argon2-hashed passwords and database-backed sessions in HttpOnly cookies.
 * **⚙️ Durable Jobs:** Idempotent submissions, retries with backoff, error classification and crash recovery.
 * **🛡️ Validated AI Output:** Model responses are checked against a Zod schema, retried once if malformed, and never saved as a fake score.
+* **🚦 Abuse Protection:** Redis sliding-window rate limits on login, signup and analyses, a per-request CSP nonce and other security headers, PDF parsing timeouts.
+* **🔭 Observability:** Structured JSON logs with a request id that follows an upload into the worker, `/healthz` and `/readyz`, optional Sentry.
 * **🎨 Modern UI/UX:** A clean, responsive interface built with **Tailwind CSS** and **Vite** for lightning-fast interactions.
 
 ---
@@ -60,6 +64,8 @@ Built with **React Router v7 on Node**, uploads are processed asynchronously by 
 | **PDF** | `pdfjs-dist` for text extraction, `@napi-rs/canvas` for thumbnails |
 | **Validation** | Zod |
 | **Testing & CI** | Vitest, React Testing Library, GitHub Actions |
+| **Server** | Express 5 production server with security headers, pino logging |
+| **Storage** | Local disk or any S3-compatible bucket |
 | **Infra** | Docker, Docker Compose |
 
 ---
@@ -90,17 +96,37 @@ The review page subscribes to an SSE stream (current state first, then live upda
 
 ---
 
-## 📂 Project Architecture
+## 🏗️ Architecture
+
+```mermaid
+flowchart LR
+    Browser -->|HTTPS| Web["Web server<br/>Express + React Router"]
+    Web --> PG[(PostgreSQL)]
+    Web --> Files[("Files: disk or S3")]
+    Web -->|enqueue| Redis[(Redis)]
+    Redis -->|job| Worker["Worker (BullMQ)"]
+    Worker --> Files
+    Worker --> PG
+    Worker -->|prompt| Gemini[Gemini API]
+    Worker -->|progress| Redis
+    Web -->|SSE| Browser
+```
+
+The upload request only validates and enqueues, so it returns quickly; the worker does the heavy work. More in [docs/architecture.md](docs/architecture.md), and the reasons behind the main choices in [docs/adr](docs/adr/README.md).
 
 ```text
 resume-ly/
+├── server/            # Express production server (headers, request id, logging)
 ├── app/
-│   ├── .server/       # Server-only: db, auth, queue, storage, LLM, jobs, PDF
+│   ├── .server/       # Server-only: db, auth, queue, storage, rate limits, LLM, jobs, PDF, ATS engine
 │   ├── components/    # UI components
-│   ├── routes/        # Pages and resource routes (files, SSE)
-│   └── lib/           # Shared: Zod schema, analysis retry, helpers
+│   ├── routes/        # Pages and resource routes (files, SSE, health)
+│   └── lib/           # Shared: Zod schema, helpers
 ├── worker/            # BullMQ worker entrypoint
+├── evals/             # Evaluation dataset, metrics, reports
+├── scripts/           # Smoke test, load test, stub Gemini
 ├── drizzle/           # SQL migrations
+├── docs/              # Architecture, deploy guide, load test, ADRs
 ├── constants/         # AI prompt and response format
 ├── test/              # Test setup, fixtures, PDF builder
 ├── docker-compose.yml
@@ -109,9 +135,15 @@ resume-ly/
 
 ---
 
+## 📈 Load Test
+
+With the AI replaced by a stub (3 to 4 s per call), 40 analyses submitted at once on one laptop: uploads were accepted in under 350 ms (p95) with no failures, and throughput went from 32 to 60 to 120 analyses a minute as worker concurrency went 2, 4, 8. Real throughput on a free Gemini key is capped by the provider at about 5 requests a minute. Method and caveats: [docs/load-test.md](docs/load-test.md).
+
+---
+
 ## 📏 Evaluation
 
-The ATS engine is measured against a labeled synthetic dataset (25 resumes, 6 job descriptions): `npm run eval`. CI fails if the numbers get worse. AI score consistency can be measured with your own key via `npm run eval:llm`. See [evals/README.md](evals/README.md) for the method, the first run's findings, and the limits of the data.
+The ATS engine is measured against a labeled synthetic dataset (25 resumes, 6 job descriptions): `npm run eval`. CI fails if the numbers get worse. The dataset is synthetic and the rules were tuned against it, so perfect scores mean the checks behave as designed on those cases, not that they would on real resumes. AI score consistency can be measured with your own key via `npm run eval:llm`; on `gemini-3.1-flash-lite` the recorded run gave identical scores across 5 repeats of every pair (5 runs, 37 pairs). See [evals/README.md](evals/README.md) for the method, the first run's findings, and the limits of the data.
 
 ---
 
@@ -128,7 +160,22 @@ npm run worker                # in a second terminal
 
 Or run everything in containers: `docker compose up --build`.
 
+Settings are listed in [.env.example](.env.example) and explained in [docs/deploy.md](docs/deploy.md#settings). Only `DATABASE_URL`, `REDIS_URL` and `SESSION_SECRET` are always required; the worker also needs `GEMINI_API_KEY`.
+
 ```bash
 npm test            # unit tests; server tests also need Postgres from compose
 npm run typecheck
+npm run smoke       # after npm run build: starts the production server, checks headers and health
+npm run load-test   # see docs/load-test.md
 ```
+
+Tests that need Redis or an S3-compatible server run when `TEST_REDIS_URL` / `TEST_S3_ENDPOINT` are set (CI sets both) and are skipped otherwise.
+
+---
+
+## ⚖️ Trade-offs
+
+* **Heuristic ATS, not a real one.** No employer's ATS is public; the checks follow common parsing problems.
+* **Free-tier AI.** Throughput and daily volume depend on the Gemini key's limits.
+* **Own auth.** No password reset or email verification yet.
+* **Two processes plus Redis and Postgres.** More to run than a single server, in exchange for fast uploads and recoverable jobs.

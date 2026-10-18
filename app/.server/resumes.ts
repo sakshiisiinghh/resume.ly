@@ -51,6 +51,7 @@ export interface SubmitDeps {
     enqueue: Enqueue;
     publish?: typeof publishProgress;
     model?: string;
+    requestId?: string;
 }
 
 async function findByKey(userId: string, key: string): Promise<ResumeWithAnalysis | null> {
@@ -69,7 +70,7 @@ export async function submitResume(input: SubmitInput, deps: SubmitDeps): Promis
 
     const existing = await findByKey(input.userId, key);
     if (existing) {
-        if (existing.analysis.status === "failed") await retryAnalysis(existing.analysis.id, deps.enqueue, deps.publish);
+        if (existing.analysis.status === "failed") await retryAnalysis(existing.analysis.id, deps.enqueue, deps.publish, deps.requestId);
         return { resumeId: existing.resume.id, created: false };
     }
 
@@ -106,11 +107,11 @@ export async function submitResume(input: SubmitInput, deps: SubmitDeps): Promis
         return { resumeId: winner.resume.id, created: false };
     }
 
-    await enqueueOrFail(analysis.id, key, deps.enqueue);
+    await enqueueOrFail(analysis.id, key, deps.enqueue, deps.requestId);
     return { resumeId, created: true };
 }
 
-export async function retryAnalysis(analysisId: string, enqueue: Enqueue, publish = publishProgress) {
+export async function retryAnalysis(analysisId: string, enqueue: Enqueue, publish = publishProgress, requestId?: string) {
     const [analysis] = await db
         .update(analyses)
         .set({
@@ -129,12 +130,12 @@ export async function retryAnalysis(analysisId: string, enqueue: Enqueue, publis
     if (!analysis) return;
 
     await publish(analysis.id, { status: "queued", stage: null });
-    await enqueueOrFail(analysis.id, analysis.idempotencyKey, enqueue);
+    await enqueueOrFail(analysis.id, analysis.idempotencyKey, enqueue, requestId);
 }
 
-async function enqueueOrFail(analysisId: string, idempotencyKey: string, enqueue: Enqueue) {
+async function enqueueOrFail(analysisId: string, idempotencyKey: string, enqueue: Enqueue, requestId?: string) {
     try {
-        await enqueue({ analysisId, idempotencyKey });
+        await enqueue({ analysisId, idempotencyKey, requestId });
     } catch {
         await db
             .update(analyses)

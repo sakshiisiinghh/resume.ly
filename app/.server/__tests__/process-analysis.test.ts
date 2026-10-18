@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import pino from "pino";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "~/.server/db";
 import { analyses, resumes } from "~/.server/db/schema";
@@ -87,6 +88,36 @@ describe.skipIf(!hasTestDb)("processAnalysis", () => {
         expect(report.checks.find((c) => c.id === "hidden-text")!.severity).toBe("warning");
         expect(report.keywords!.nice.missing).toEqual(["Kafka"]);
         expect(generate.mock.calls[0][0].user).not.toContain("kafka terraform");
+    });
+
+    it("logs the start and the finish with timings, under the job's own logger", async () => {
+        generate.mockResolvedValue({ text: JSON.stringify(validFeedback), tokensIn: 120, tokensOut: 340 });
+        const { analysis } = await submit(buildPdf([{ items: columnItems(cleanResumeLines) }]), "Go");
+        const lines: Record<string, any>[] = [];
+        const log = pino({ level: "info" }, { write: (line: string) => void lines.push(JSON.parse(line)) }).child({ requestId: "req-1", analysisId: analysis.id });
+
+        await processAnalysis(analysis.id, { storage, llm, publish, log });
+
+        expect(lines.map((l) => l.msg)).toEqual(["analysis started", "analysis finished"]);
+        expect(lines.every((l) => l.requestId === "req-1" && l.analysisId === analysis.id)).toBe(true);
+        expect(lines[0]).toMatchObject({ attempt: 1 });
+        expect(lines[0].queueWaitMs).toBeGreaterThanOrEqual(0);
+        expect(lines[1]).toMatchObject({ pages: 1, tokensIn: 120, tokensOut: 340, finalScore: 89 });
+        for (const field of ["totalMs", "readMs", "checksMs", "llmMs"]) expect(lines[1][field], field).toBeGreaterThanOrEqual(0);
+    });
+
+    it("never writes the resume text or the job description to the logs", async () => {
+        generate.mockResolvedValue({ text: JSON.stringify(validFeedback) });
+        const { analysis } = await submit(makePdf(resumeLines), "a confidential job description");
+        const lines: string[] = [];
+        const log = pino({ level: "trace" }, { write: (line: string) => void lines.push(line) });
+
+        await processAnalysis(analysis.id, { storage, llm, publish, log });
+
+        const logged = lines.join("\n");
+        expect(logged).not.toContain("Sakshi Singh");
+        expect(logged).not.toContain("idempotent settlement");
+        expect(logged).not.toContain("confidential job description");
     });
 
     it("keeps resume text in the user turn, away from the instructions", async () => {
