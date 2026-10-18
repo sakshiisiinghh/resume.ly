@@ -109,6 +109,12 @@ resume-ly/
 
 ---
 
+## 📏 Evaluation
+
+The ATS engine is measured against a labeled synthetic dataset (25 resumes, 6 job descriptions): `npm run eval`. CI fails if the numbers get worse. AI score consistency can be measured with your own key via `npm run eval:llm`. See [evals/README.md](evals/README.md) for the method, the first run's findings, and the limits of the data.
+
+---
+
 ## ⚙️ Getting Started
 
 ```bash

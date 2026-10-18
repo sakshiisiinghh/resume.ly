@@ -67,10 +67,19 @@ export function textFromRuns(runs: Pick<RawRun, "text" | "hasEOL">[]): string {
         .join("\n");
 }
 
-function buildLines(runs: Run[], pageNumber: number): Line[] {
-    const sorted = runs
-        .filter((r) => r.page === pageNumber)
-        .sort((a, b) => a.top - b.top || a.x - b.x);
+function buildLines(runs: Run[], pageNumber: number, gutterX: number | null): Line[] {
+    const onPage = runs.filter((r) => r.page === pageNumber);
+    if (gutterX === null) return buildColumnLines(onPage, pageNumber);
+
+    // Each column reads on its own, so text at the same height in two columns isn't one line.
+    return [
+        ...buildColumnLines(onPage.filter((r) => r.x < gutterX), pageNumber),
+        ...buildColumnLines(onPage.filter((r) => r.x >= gutterX), pageNumber),
+    ];
+}
+
+function buildColumnLines(runs: Run[], pageNumber: number): Line[] {
+    const sorted = [...runs].sort((a, b) => a.top - b.top || a.x - b.x);
 
     const groups: Run[][] = [];
     for (const run of sorted) {
@@ -218,7 +227,7 @@ export function buildDocument(pages: RawPage[]): ExtractedDoc {
         pageCount: pages.length,
         pageHeights: pages.map((p) => p.height),
         hidden: runs.filter((r) => r.hidden !== null),
-        lines: pages.flatMap((_, index) => buildLines(visible, index + 1)),
+        lines: pages.flatMap((_, index) => buildLines(visible, index + 1, gutters.get(index + 1) ?? null)),
         text: textFromRuns(visible),
         medianFontSize: weightedMedian(
             visible.filter((r) => !isBlank(r.text)).map((r) => ({ value: r.fontSize, weight: r.text.trim().length }))

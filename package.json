@@ -12,7 +12,10 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx app/.server/db/migrate.ts",
     "worker": "tsx worker/index.ts",
-    "worker:dev": "tsx watch worker/index.ts"
+    "worker:dev": "tsx watch worker/index.ts",
+    "eval": "tsx evals/run.ts deterministic",
+    "eval:baseline": "tsx evals/run.ts deterministic --write-baseline",
+    "eval:llm": "tsx evals/run.ts llm"
   },
   "dependencies": {
     "@google/genai": "^2.30.0",

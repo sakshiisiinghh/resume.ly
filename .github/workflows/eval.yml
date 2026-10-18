@@ -1,0 +1,41 @@
+name: AI evaluation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - constants/**
+      - app/.server/llm/**
+      - app/.server/ats/**
+      - evals/**
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Deterministic evaluation
+        run: npm run eval -- --check
+
+      # About 9 model calls. Skipped when the repository has no GEMINI_API_KEY secret.
+      - name: AI regression
+        if: env.GEMINI_API_KEY != ''
+        run: npm run eval:llm -- --quick --check
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-reports
+          path: evals/reports/*.md
+          if-no-files-found: ignore

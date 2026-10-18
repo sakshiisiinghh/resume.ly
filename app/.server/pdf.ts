@@ -25,7 +25,7 @@ export interface ParsedPdf {
     thumbnail: Buffer | null;
 }
 
-export async function readPdf(bytes: Buffer): Promise<ParsedPdf> {
+export async function readPdf(bytes: Buffer, { thumbnail = true } = {}): Promise<ParsedPdf> {
     let pdf: pdfjs.PDFDocumentProxy;
     try {
         pdf = await pdfjs.getDocument({ data: new Uint8Array(bytes), verbosity: pdfjs.VerbosityLevel.ERRORS }).promise;
@@ -47,7 +47,7 @@ export async function readPdf(bytes: Buffer): Promise<ParsedPdf> {
             );
         }
 
-        return { doc, thumbnail: await renderThumbnail(pdf).catch(() => null) };
+        return { doc, thumbnail: thumbnail ? await renderThumbnail(pdf).catch(() => null) : null };
     } finally {
         await pdf.destroy();
     }

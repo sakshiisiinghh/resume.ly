@@ -145,6 +145,24 @@ describe.skipIf(!hasTestDb)("processAnalysis", () => {
         expect((await reload(analysis.id)).finalScore).toBeNull();
     });
 
+    it("fails permanently for a prompt version it doesn't know", async () => {
+        const { analysis } = await submit(makePdf(resumeLines));
+        await db.update(analyses).set({ promptVersion: "v9" }).where(eq(analyses.id, analysis.id));
+
+        await expect(run(analysis.id)).rejects.toMatchObject({ code: "unknown_prompt_version" });
+        expect(generate).not.toHaveBeenCalled();
+    });
+
+    it("uses the prompt version stored on the analysis", async () => {
+        generate.mockResolvedValue({ text: JSON.stringify(validFeedback) });
+        const { analysis } = await submit(makePdf(resumeLines));
+        await db.update(analyses).set({ promptVersion: "v2" }).where(eq(analyses.id, analysis.id));
+
+        await run(analysis.id);
+
+        expect(generate.mock.calls[0][0].system).toContain("Scoring rubric");
+    });
+
     it("rethrows transient provider errors so the queue can retry", async () => {
         generate.mockRejectedValue(new TransientError("The AI service is temporarily unavailable.", "llm_unavailable"));
         const { analysis } = await submit(makePdf(resumeLines));

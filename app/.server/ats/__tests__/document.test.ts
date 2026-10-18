@@ -78,6 +78,23 @@ describe("columns", () => {
         expect(buildDocument([page(...body, ...sidebar)]).columnPages).toEqual([]);
     });
 
+    it("reads each column as its own lines instead of merging text at the same height", () => {
+        const left = Array.from({ length: 10 }, (_, i) => run(i === 0 ? "Skills" : `Left column line number ${i}`, 40, 60 + i * 15));
+        const right = Array.from({ length: 10 }, (_, i) => run(i === 0 ? "Experience" : `Right column line number ${i}`, 330, 60 + i * 15));
+
+        const lines = buildDocument([page(...left, ...right)]).lines.map((l) => l.text);
+
+        expect(lines).toContain("Skills");
+        expect(lines).toContain("Experience");
+        expect(lines.some((l) => l.includes("Skills") && l.includes("Experience"))).toBe(false);
+    });
+
+    it("keeps one line per row when there is only one column", () => {
+        const doc = buildDocument([page(run("Left", 50, 100, { hasEOL: false }), run("Right side", 330, 100))]);
+
+        expect(doc.lines.map((l) => l.text)).toEqual(["Left Right side"]);
+    });
+
     it("needs enough lines to judge", () => {
         const runs = [run("Left", 40, 60), run("Right", 330, 60), run("Left two", 40, 75), run("Right two", 330, 75)];
 

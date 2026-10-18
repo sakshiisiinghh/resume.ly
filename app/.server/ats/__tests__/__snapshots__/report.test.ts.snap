@@ -174,7 +174,7 @@ exports[`buildAtsReport > matches the golden report for a clean resume 1`] = `
           "term": "AWS",
         },
         {
-          "count": 4,
+          "count": 2,
           "evidence": "Designed REST APIs and gRPC services deployed with Kubernetes on AWS.",
           "term": "REST APIs",
         },

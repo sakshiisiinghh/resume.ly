@@ -74,6 +74,86 @@ describe("extractJobTerms", () => {
     });
 });
 
+describe("skills named inside longer ones", () => {
+    const skillsIn = (text: string) => names(extractJobTerms(text).required);
+
+    it("doesn't count CSS inside Tailwind CSS", () => {
+        expect(skillsIn("Experience with Tailwind CSS")).toEqual(["Tailwind CSS"]);
+    });
+
+    it("still counts CSS when it appears on its own as well", () => {
+        expect(skillsIn("HTML, CSS and Tailwind CSS").sort()).toEqual(["CSS", "HTML", "Tailwind CSS"]);
+    });
+
+    it("counts a skill once when an alias and an exact name overlap", () => {
+        const result = matchKeywords("Built REST APIs and Apache Spark jobs", extractJobTerms("REST APIs, Apache Spark"))!;
+
+        expect(result.required.matched.map((m) => [m.term, m.count])).toEqual([["REST APIs", 1], ["Apache Spark", 1]]);
+    });
+
+    it("matches a skill whose name is split by a line wrap", () => {
+        const resume = "Created components with Tailwind\nCSS and wrote unit\ntests for them";
+        const result = matchKeywords(resume, extractJobTerms("Tailwind CSS, CSS, unit tests"))!;
+
+        expect(result.required.matched.map((m) => m.term)).toEqual(["Tailwind CSS", "Unit Testing"]);
+        expect(result.required.missing).toEqual(["CSS"]);
+    });
+});
+
+describe("words that are also skills", () => {
+    const found = (text: string) => names(extractJobTerms(text).required);
+
+    it.each([
+        "React to customer feedback and update the pages",
+        "Express ownership of your work from design to production.",
+        "Swift response to production incidents",
+        "Go to market with a clear plan",
+        "Rust never sleeps",
+    ])("ignores %s", (text) => {
+        expect(found(text)).toEqual([]);
+    });
+
+    it.each([
+        ["Built a portal with React and TypeScript", "React"],
+        ["Frontend: React", "React"],
+        ["Experience with Rust", "Rust"],
+        ["Languages: Go, Python", "Go"],
+        ["Express, Koa and Fastify", "Express.js"],
+        ["Strong React", "React"],
+    ])("finds the skill in %s", (text, skill) => {
+        expect(found(text)).toContain(skill);
+    });
+
+    it("accepts the word when another skill on the line gives it context", () => {
+        expect(found("React skills and Docker experience")).toContain("React");
+    });
+});
+
+describe("required and nice-to-have sections", () => {
+    const split = (jd: string) => {
+        const { required, nice } = extractJobTerms(jd);
+        return { required: names(required), nice: names(nice) };
+    };
+
+    it.each(["A plus:", "It would be great if you also know:", "Preferred:", "Bonus points:", "Good to have:", "Would be nice:"])("treats %s as a nice-to-have section", (heading) => {
+        expect(split(`Requirements:\n- Go\n${heading}\n- Kafka`)).toEqual({ required: ["Go"], nice: ["Kafka"] });
+    });
+
+    it("returns to required after a requirements heading", () => {
+        expect(split("A plus:\n- Kafka\nMust have:\n- Go")).toEqual({ required: ["Go"], nice: ["Kafka"] });
+    });
+
+    it("keeps the current section when a heading says neither", () => {
+        expect(split("Nice to have:\n- Kafka\nTools:\n- Docker")).toEqual({ required: [], nice: ["Kafka", "Docker"] });
+    });
+
+    it("doesn't treat a long sentence ending in a colon as a heading", () => {
+        const jd = "Requirements:\n- Go\nWe would love to hear about anything you have built, shipped or run in production that is a bonus:\n- Redis";
+
+        expect(split(jd).required).toContain("Redis");
+    });
+});
+
 describe("matchKeywords", () => {
     const resume = "Built services in Go and Python on PostgreSQL. Deployed with Docker on AWS. Wrote REST APIs.";
 

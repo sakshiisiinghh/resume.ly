@@ -307,29 +307,31 @@ Show matched and missing terms with evidence from the resume text. Treat checks 
 
 ### Evaluation dataset
 
-- [ ] A small, permission-safe dataset of synthetic or anonymized resumes paired with job descriptions (e.g. 25–40 pairs).
-- [ ] Labels for expected parseability issues and keyword matches.
-- [ ] Strong, average, weak, multi-column and scanned examples.
-- [ ] Documented data provenance and evaluation instructions.
+- [x] A small, permission-safe dataset of synthetic resumes paired with job descriptions: 25 resumes, 6 job descriptions, 37 pairs.
+- [x] Labels for expected parseability issues and keyword matches, checked against the text by an independent matcher.
+- [x] Strong, average, weak, multi-column and scanned examples (plus malformed and 14 one-defect variants).
+- [x] Documented data provenance and evaluation instructions (`evals/README.md`).
 
 ### Evaluation scripts
 
-- [ ] Precision/recall for deterministic checks and keyword extraction against labels.
-- [ ] Repeated LLM analyses (e.g. N=5) on a fixed subset → per-category score standard deviation.
-- [ ] Ranking sanity: stronger examples should generally outscore weaker ones for the same JD (pairwise agreement %).
-- [ ] Record model, prompt version, dataset version and run date in each report (`evals/reports/`).
-- [ ] Track latency and token/cost estimates where available.
+- [x] Precision/recall for deterministic checks and keyword extraction against labels. First run found 5 engine problems; all fixed and tested.
+- [ ] Repeated LLM analyses (e.g. N=5) on a fixed subset → per-category score standard deviation. **Built and tested; not yet run (needs `GEMINI_API_KEY`).**
+- [x] Ranking sanity without the AI: 18 of 18 comparisons in the right order.
+- [ ] Ranking sanity for the AI's scores. **Built and tested; not yet run.**
+- [x] Record model, prompt version, dataset version, commit and run date in each report (`evals/reports/`).
+- [x] Track latency and tokens; cost is estimated only when prices are supplied. (Reported by the AI run, which hasn't happened yet.)
 
 ### Improving consistency (after the baseline)
 
-- [ ] Temperature 0, a scoring rubric with anchors (what a 40, 70 or 90 means), score per criterion then aggregate.
-- [ ] Optionally take the median of 3 runs; measure the cost vs variance trade-off before adopting it.
+- [x] Temperature 0 (already used).
+- [ ] A scoring rubric with anchors, then aggregate. **Written as prompt `v2`; not adopted until measured against `v1`.**
+- [ ] Optionally take the median of 3 runs; measure the cost vs variance trade-off before adopting it. **The estimate is built into the AI report; not yet run.**
 
 ### Regression checks
 
-- [ ] Fast unit/eval checks in CI.
-- [ ] A small prompt-regression set runs when `llm/` or `ats/` changes.
-- [ ] Set thresholds only after a baseline exists; don't invent accuracy or variance numbers.
+- [x] Fast unit/eval checks in CI (`npm test` fails if the deterministic numbers get worse).
+- [x] A small prompt-regression set runs when `llm/` or `ats/` changes (`.github/workflows/eval.yml`; the AI part needs the `GEMINI_API_KEY` secret).
+- [x] Set thresholds only after a baseline exists: the deterministic baseline is recorded; the AI baseline will be recorded with the first real run.
 
 **Deliverable:** a reproducible report with actual results and known limitations.
 
