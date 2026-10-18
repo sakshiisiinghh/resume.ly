@@ -1,30 +1,32 @@
-import React, {useCallback, useState} from 'react'
-import {useDropzone} from "react-dropzone";
+import {useCallback} from 'react'
+import {type FileRejection, useDropzone} from "react-dropzone";
 import {formatSize} from "~/lib/util";
 
 interface FileUploaderProps {
+    file: File | null;
     onFileSelect?: (file: File | null) => void;
 }
 
-const FileUploader = ({ onFileSelect }: FileUploaderProps) => {
-    const onDrop = useCallback((acceptedFiles: File[]) => {
-        const file = acceptedFiles[0] || null;
+const maxFileSize = 20 * 1024 * 1024;
 
-        onFileSelect?.(file);
+const FileUploader = ({ file, onFileSelect }: FileUploaderProps) => {
+    const onDrop = useCallback((acceptedFiles: File[]) => {
+        onFileSelect?.(acceptedFiles[0] || null);
     }, [onFileSelect]);
 
-    const maxFileSize=20*1024*1024; //20MB in bytes
-    const {getRootProps,getInputProps,isDragActive,acceptedFiles} = useDropzone({
+    const {getRootProps, getInputProps, fileRejections} = useDropzone({
         onDrop,
         multiple: false,
-        accept:{'application/pdf' : ['.pdf']},
-        maxSize:maxFileSize,
+        accept: {'application/pdf': ['.pdf']},
+        maxSize: maxFileSize,
     })
-    const file=acceptedFiles[0] || null;
+
+    const rejection: FileRejection | undefined = fileRejections[0];
+
     return (
         <div className="w-full gradient-border">
             <div {...getRootProps()}>
-                <input {...getInputProps()} />
+                <input id="uploader" {...getInputProps()} />
                 <div className="space-y-4 cursor-pointer">
 
                     {file ? (
@@ -40,10 +42,16 @@ const FileUploader = ({ onFileSelect }: FileUploaderProps) => {
                                     </p>
                                 </div>
                             </div>
-                            <button className="p-2 cursor-pointer" onClick={(e) => {
-                                onFileSelect?.(null)
-                            }}>
-                                <img src="/icons/cross.svg" alt="remove" className="w-4 h-4" />
+                            <button
+                                type="button"
+                                aria-label="Remove file"
+                                className="p-2 cursor-pointer"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onFileSelect?.(null);
+                                }}
+                            >
+                                <img src="/icons/cross.svg" alt="" className="w-4 h-4" />
                             </button>
                         </div>
                     ) : (
@@ -56,8 +64,15 @@ const FileUploader = ({ onFileSelect }: FileUploaderProps) => {
                                    Click to Upload
                                 </span> or Drag and Drop
                             </p>
-                            <p className="text-lg text-gray-500">PDF(max{formatSize(maxFileSize)})</p>
+                            <p className="text-lg text-gray-500">PDF (max {formatSize(maxFileSize)})</p>
                         </div>
+                    )}
+                    {!file && rejection && (
+                        <p role="alert" className="text-sm text-red-600">
+                            {rejection.errors[0]?.code === 'file-too-large'
+                                ? `File is too large. Maximum size is ${formatSize(maxFileSize)}.`
+                                : 'Only PDF files are supported.'}
+                        </p>
                     )}
                 </div>
             </div>

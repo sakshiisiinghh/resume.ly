@@ -1,19 +1,20 @@
-import React, {useEffect} from 'react'
+import {useEffect} from 'react'
 import {usePuterStore} from "~/lib/puter";
 import {useLocation, useNavigate} from "react-router";
+import {safeRedirect} from "~/lib/util";
 export const meta = () => ([
-    { title: 'Resumind | Auth' },
+    { title: 'Resume.ly | Auth' },
     { name: 'description', content: 'Log into your account' },
 ])
 const Auth = () => {
-    const{isLoading,auth}=usePuterStore();
+    const{isLoading,auth,error}=usePuterStore();
     const location = useLocation(); 
-    const next = location.search.split('next=')[1];
+    const next = safeRedirect(new URLSearchParams(location.search).get('next'));
     const navigate = useNavigate();
 
     useEffect(() => {
         if(auth.isAuthenticated) navigate(next);
-    }, [auth.isAuthenticated, next])
+    }, [auth.isAuthenticated, next, navigate])
 
     return (
      <main className="bg-[url('/images/bg-auth.svg')] bg-cover min-h-screen flex items-center justify-center">
@@ -40,6 +41,9 @@ const Auth = () => {
                                  </button>
                              )}
                          </>
+                     )}
+                     {error && (
+                         <p className="text-red-500 text-sm text-center mt-4">{error}</p>
                      )}
                  </div>
              </section>

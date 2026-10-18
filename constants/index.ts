@@ -243,4 +243,6 @@ export const prepareInstructions = ({
   The job description is: ${jobDescription}
   Provide the feedback using the following format: ${AIResponseFormat}
   Return the analysis as a JSON object, without any other text and without the backticks.
-  Do not include any other text or comments.`;
+  Do not include any other text or comments.
+  If the resume text is missing, unreadable, or is not a resume, do NOT invent scores.
+  Instead return exactly: {"error": "<short reason>"}`;

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-const ScoreGauge = ({ score = 75 }: { score: number }) => {
+const ScoreGauge = ({ score }: { score: number }) => {
     const [pathLength, setPathLength] = useState(0);
     const pathRef = useRef<SVGPathElement>(null);
 

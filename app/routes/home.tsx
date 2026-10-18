@@ -8,37 +8,43 @@ import {useEffect, useState} from "react";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Resumind" },
+    { title: "Resume.ly" },
     { name: "description", content: "Smart feedback for your dream job!" },
   ];
 }
 
 export default function Home() {
-  const{auth,kv}=usePuterStore();
+  const{auth,isLoading,kv}=usePuterStore();
   const navigate = useNavigate();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [loadingResumes, setLoadingResumes] = useState(false);
 
   useEffect(() => {
-    if(!auth.isAuthenticated) navigate('auth?next=/');
-  }, [auth.isAuthenticated])
+    if(!isLoading && !auth.isAuthenticated) navigate('/auth?next=/');
+  }, [isLoading, auth.isAuthenticated, navigate])
 
   useEffect(() => {
+    if (!auth.isAuthenticated) return;
+
     const loadResumes = async () => {
       setLoadingResumes(true);
 
       const resumes = (await kv.list('resume:*', true)) as KVItem[];
 
-      const parsedResumes = resumes?.map((resume) => (
-          JSON.parse(resume.value) as Resume
-      ))
+      const parsedResumes = (resumes ?? []).flatMap((resume) => {
+        try {
+          return [JSON.parse(resume.value) as Resume];
+        } catch {
+          return [];
+        }
+      });
 
-      setResumes(parsedResumes || []);
+      setResumes(parsedResumes);
       setLoadingResumes(false);
     }
 
     loadResumes()
-  }, []);
+  }, [auth.isAuthenticated]);
 
 
   return <main className="bg-[url('/images/bg-main.svg')] bg-cover">
@@ -61,7 +67,11 @@ export default function Home() {
       {!loadingResumes && resumes.length > 0 && (
           <div className="resumes-section">
             {resumes.map((resume) => (
-                <ResumeCard key={resume.id} resume={resume} />
+                <ResumeCard
+                    key={resume.id}
+                    resume={resume}
+                    onDeleted={(id) => setResumes((prev) => prev.filter((r) => r.id !== id))}
+                />
             ))}
           </div>
       )}
