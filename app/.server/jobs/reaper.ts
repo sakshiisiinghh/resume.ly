@@ -7,7 +7,12 @@ import { publishProgress } from "~/.server/redis";
 export const STALE_AFTER_MS = 5 * 60 * 1000;
 
 // Re-queues (or fails, once attempts run out) analyses stuck in "processing" with no heartbeat.
-export async function reapStaleAnalyses(enqueue: Enqueue, now = new Date()) {
+interface ReapOptions {
+    now?: Date;
+    publish?: typeof publishProgress;
+}
+
+export async function reapStaleAnalyses(enqueue: Enqueue, { now = new Date(), publish = publishProgress }: ReapOptions = {}) {
     const cutoff = new Date(now.getTime() - STALE_AFTER_MS);
     const stale = and(eq(analyses.status, "processing"), lt(analyses.heartbeatAt, cutoff));
 
@@ -25,8 +30,8 @@ export async function reapStaleAnalyses(enqueue: Enqueue, now = new Date()) {
 
     for (const { id, idempotencyKey } of requeued) await enqueue({ analysisId: id, idempotencyKey });
     await Promise.all([
-        ...exhausted.map(({ id }) => publishProgress(id, { status: "failed", stage: null })),
-        ...requeued.map(({ id }) => publishProgress(id, { status: "queued", stage: null })),
+        ...exhausted.map(({ id }) => publish(id, { status: "failed", stage: null })),
+        ...requeued.map(({ id }) => publish(id, { status: "queued", stage: null })),
     ]);
 
     return { requeued: requeued.length, failed: exhausted.length };

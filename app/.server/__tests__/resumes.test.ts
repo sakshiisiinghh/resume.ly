@@ -45,7 +45,8 @@ describe("validatePdf", () => {
 describe.skipIf(!hasTestDb)("submitResume", () => {
     const storage = new MemoryStorage();
     const enqueue = vi.fn().mockResolvedValue(undefined);
-    const deps = { storage, enqueue, model: "test-model" };
+    const publish = vi.fn().mockResolvedValue(undefined);
+    const deps = { storage, enqueue, publish, model: "test-model" };
 
     beforeEach(async () => {
         await resetDb();
@@ -149,7 +150,7 @@ describe.skipIf(!hasTestDb)("submitResume", () => {
 
 describe.skipIf(!hasTestDb)("ownership", () => {
     const storage = new MemoryStorage();
-    const deps = { storage, enqueue: vi.fn().mockResolvedValue(undefined), model: "test-model" };
+    const deps = { storage, enqueue: vi.fn().mockResolvedValue(undefined), publish: vi.fn().mockResolvedValue(undefined), model: "test-model" };
 
     beforeEach(async () => {
         await resetDb();

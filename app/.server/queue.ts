@@ -1,5 +1,6 @@
 import { Queue } from "bullmq";
 import { getRedis } from "~/.server/redis";
+import { withTimeout } from "~/.server/timeout";
 
 export const QUEUE_NAME = "analysis";
 export const MAX_ATTEMPTS = 3;
@@ -18,7 +19,7 @@ export function getQueue() {
 
 // jobId is the idempotency key, so BullMQ drops a duplicate that is already queued or running.
 export const enqueueAnalysis: Enqueue = async ({ analysisId, idempotencyKey }) => {
-    await getQueue().add(
+    const job = getQueue().add(
         "analyze",
         { analysisId } satisfies AnalysisJob,
         {
@@ -29,4 +30,5 @@ export const enqueueAnalysis: Enqueue = async ({ analysisId, idempotencyKey }) =
             removeOnFail: true,
         }
     );
+    await withTimeout(job, 5000, "enqueue");
 };

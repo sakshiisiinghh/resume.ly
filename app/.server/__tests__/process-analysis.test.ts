@@ -22,7 +22,7 @@ const submit = async (bytes: Buffer) => {
     const user = await createUser();
     const { resumeId } = await submitResume(
         { userId: user.id, fileName: "r.pdf", bytes, companyName: "", jobTitle: "Backend Engineer", jobDescription: "Go" },
-        { storage, enqueue: vi.fn().mockResolvedValue(undefined), model: "test-model" }
+        { storage, enqueue: vi.fn().mockResolvedValue(undefined), publish, model: "test-model" }
     );
     const found = (await getResume(user.id, resumeId))!;
     return { user, ...found };

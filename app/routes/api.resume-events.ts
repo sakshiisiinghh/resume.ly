@@ -1,6 +1,7 @@
 import { getUser } from "~/.server/auth";
 import { createRedis, progressChannel } from "~/.server/redis";
 import { getResume } from "~/.server/resumes";
+import { withTimeout } from "~/.server/timeout";
 import type { Route } from "./+types/api.resume-events";
 
 const HEARTBEAT_MS = 15_000;
@@ -16,7 +17,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
     // Subscribe before reading the current state so an update in between can't be missed.
     const subscriber = createRedis();
-    await subscriber.subscribe(progressChannel(analysisId));
+    try {
+        await withTimeout(subscriber.subscribe(progressChannel(analysisId)), 3000, "subscribe");
+    } catch {
+        subscriber.disconnect();
+        throw new Response("Progress updates are unavailable", { status: 503 });
+    }
     const current = await getResume(user.id, params.id);
 
     const encoder = new TextEncoder();

@@ -49,6 +49,7 @@ export interface SubmitInput {
 export interface SubmitDeps {
     storage: StorageDriver;
     enqueue: Enqueue;
+    publish?: typeof publishProgress;
     model?: string;
 }
 
@@ -68,7 +69,7 @@ export async function submitResume(input: SubmitInput, deps: SubmitDeps): Promis
 
     const existing = await findByKey(input.userId, key);
     if (existing) {
-        if (existing.analysis.status === "failed") await retryAnalysis(existing.analysis.id, deps.enqueue);
+        if (existing.analysis.status === "failed") await retryAnalysis(existing.analysis.id, deps.enqueue, deps.publish);
         return { resumeId: existing.resume.id, created: false };
     }
 
@@ -109,7 +110,7 @@ export async function submitResume(input: SubmitInput, deps: SubmitDeps): Promis
     return { resumeId, created: true };
 }
 
-export async function retryAnalysis(analysisId: string, enqueue: Enqueue) {
+export async function retryAnalysis(analysisId: string, enqueue: Enqueue, publish = publishProgress) {
     const [analysis] = await db
         .update(analyses)
         .set({
@@ -127,7 +128,7 @@ export async function retryAnalysis(analysisId: string, enqueue: Enqueue) {
         .returning();
     if (!analysis) return;
 
-    await publishProgress(analysis.id, { status: "queued", stage: null });
+    await publish(analysis.id, { status: "queued", stage: null });
     await enqueueOrFail(analysis.id, analysis.idempotencyKey, enqueue);
 }
 
