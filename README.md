@@ -17,9 +17,9 @@
 
 ## 🚀 Live Application
 
-🔗 **Earlier version:** [resume-ly-neon.vercel.app](https://resume-ly-neon.vercel.app/auth?next=/) is the original deployment and does not run the current code (the worker, queue and database need a host that runs long-lived processes).
+🔗 **Live demo:** [resumely-production-ba65.up.railway.app](https://resumely-production-ba65.up.railway.app)
 
-The current version runs locally with one command (see [Getting Started](#️-getting-started)) and is packaged for deployment: see [docs/deploy.md](docs/deploy.md).
+Runs the web server and the worker in one container on Railway, with managed PostgreSQL and Redis. The AI runs on a free Gemini key, so heavy use may hit its daily limit and analyses will then fail with a clear message. To run it yourself or deploy elsewhere, see [docs/deploy.md](docs/deploy.md).
 
 ---
 
